@@ -1,4 +1,4 @@
-# phnetdist
+# ph-net-distance
 
 **Reproducible road-and-ferry shortest-path distances between Philippine cities and municipalities.**
 
@@ -9,7 +9,7 @@ in kilometres. It is designed for national-scale runs with resumable stages,
 clear row/column identifiers, and empirical verification against the original
 unreduced graph.
 
-**[Documentation (GitHub Pages after deployment)](https://miraflor.github.io/phnetdist/)** ·
+**[Documentation (GitHub Pages after deployment)](https://miraflor.github.io/ph-net-distance/)** ·
 [Methodology](docs/methodology.md) · [Inputs](docs/inputs.md) ·
 [Independent boundary generation](docs/boundaries.md) ·
 [Independent transport extraction](docs/transport.md) · [Validation](docs/validation.md)
@@ -34,8 +34,8 @@ The input directory must contain these WGS84 shapefiles (subfolders are allowed)
 | Locality points | `muncity_centroids.shp` | Matrix origin/destination points, text IDs and labels |
 
 Configure input, work and output locations using `--data`, `--work`, `--out`,
-or the `PHNETDIST_DATA`, `PHNETDIST_WORK`, and
-`PHNETDIST_OUT` environment variables. Default paths are `data/`,
+or the `PH_NET_DISTANCE_DATA`, `PH_NET_DISTANCE_WORK`, and
+`PH_NET_DISTANCE_OUT` environment variables. Default paths are `data/`,
 `work/`, and `out/` under the project root. The three source filenames,
 parameters and stages remain configurable in `config.py`.
 

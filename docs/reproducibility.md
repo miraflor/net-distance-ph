@@ -58,9 +58,9 @@ that distributing code automatically gives permission to distribute data.
 
 ## GitHub Pages deployment
 
-1. Create a new repository named **`phnetdist`**, then push this
+1. Create a new repository named **`ph-net-distance`**, then push this
    source tree. Do not upload the old `work/`, `out/` or private input folder.
-2. The site and repository URLs in `mkdocs.yml` target `miraflor/phnetdist`. Update them only if you publish under a different owner or repository.
+2. The site and repository URLs in `mkdocs.yml` target `miraflor/ph-net-distance`. Update them only if you publish under a different owner or repository.
 3. In repository **Settings → Pages → Build and deployment**, choose
    **GitHub Actions** as the source.
 4. Push to `main`, or trigger the **GitHub Pages** workflow manually under

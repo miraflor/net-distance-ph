@@ -24,8 +24,8 @@ from scipy.sparse.csgraph import dijkstra
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mkshp import write_dbf, write_point_shp, write_polyline_shp
 
-from phnetdist.matrix import build_csr
-from phnetdist.reduce import dedupe_edges
+from ph_net_distance.matrix import build_csr
+from ph_net_distance.reduce import dedupe_edges
 
 # A label with a comma and a double quote, to check that towns.csv keeps it exactly.
 AWKWARD_NAME = 'Town, "Three"'
@@ -103,9 +103,9 @@ def build_fixture(data_dir):
 def _env(tmp_path):
     env = os.environ.copy()
     env.update({
-        "PHNETDIST_DATA": str(tmp_path / "data"),
-        "PHNETDIST_WORK": str(tmp_path / "work"),
-        "PHNETDIST_OUT": str(tmp_path / "out"),
+        "PH_NET_DISTANCE_DATA": str(tmp_path / "data"),
+        "PH_NET_DISTANCE_WORK": str(tmp_path / "work"),
+        "PH_NET_DISTANCE_OUT": str(tmp_path / "out"),
     })
     return env
 

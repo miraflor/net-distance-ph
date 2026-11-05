@@ -12,9 +12,9 @@ import os
 # Paths are relative to this repository unless overridden by environment
 # variables. No private machine paths or raw datasets are committed.
 PROJECT_DIR = Path(__file__).resolve().parent
-DATA = Path(os.environ.get("PHNETDIST_DATA", PROJECT_DIR / "data")).expanduser()
-WORK = Path(os.environ.get("PHNETDIST_WORK", PROJECT_DIR / "work")).expanduser()
-OUT = Path(os.environ.get("PHNETDIST_OUT", PROJECT_DIR / "out")).expanduser()
+DATA = Path(os.environ.get("PH_NET_DISTANCE_DATA", PROJECT_DIR / "data")).expanduser()
+WORK = Path(os.environ.get("PH_NET_DISTANCE_WORK", PROJECT_DIR / "work")).expanduser()
+OUT = Path(os.environ.get("PH_NET_DISTANCE_OUT", PROJECT_DIR / "out")).expanduser()
 
 ROAD_SHP = "primsectertrunk_road.shp"
 FERRY_SHP = "ferry_route_shape.shp"

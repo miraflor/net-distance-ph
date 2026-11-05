@@ -12,9 +12,9 @@ PROJECT = Path(__file__).resolve().parents[1]
 
 
 def _clean_env():
-    # No PHNETDIST_* variables: the data folder is named only on the
+    # No PH_NET_DISTANCE_* variables: the data folder is named only on the
     # command line, as in the README and the beginner guide.
-    return {k: v for k, v in os.environ.items() if not k.startswith("PHNETDIST")}
+    return {k: v for k, v in os.environ.items() if not k.startswith("PH_NET_DISTANCE")}
 
 
 def _run(tmp_path, *args):

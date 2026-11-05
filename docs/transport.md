@@ -1,6 +1,6 @@
 # Building the road and ferry inputs independently
 
-`phnetdist` can now **obtain and prepare its own road and ferry geometries** from an OpenStreetMap Philippines extract. The preparation code is optional; users with audited historical shapefiles can still run the original shortest-path engine without rebuilding its sources.
+`ph-net-distance` can now **obtain and prepare its own road and ferry geometries** from an OpenStreetMap Philippines extract. The preparation code is optional; users with audited historical shapefiles can still run the original shortest-path engine without rebuilding its sources.
 
 ## 1. Source and data rights
 

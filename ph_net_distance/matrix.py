@@ -63,7 +63,7 @@ def build_csr(u, v, w, n_nodes):
 
     De-duplication is not optional: scipy's COO -> CSR conversion *sums*
     duplicate entries, so a surviving parallel edge would silently become an
-    edge of the wrong weight. ``phnetdist.reduce.dedupe_edges`` guarantees it.
+    edge of the wrong weight. ``ph_net_distance.reduce.dedupe_edges`` guarantees it.
 
     Indices are stored as int32 when they fit, which is the layout scipy's
     csgraph wants internally -- it avoids a conversion on every call.

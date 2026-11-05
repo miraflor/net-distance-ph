@@ -1,17 +1,12 @@
 # Changelog
 
-## Unreleased — project rename to phnetdist
+## Unreleased — repository and package name alignment
 
-- Rebranded the source repository, Python distribution and import package as
-  `phnetdist`, including the README, GitHub Pages configuration, build metadata,
-  scripts and tests.
-- Environment variables now use `PHNETDIST_DATA`, `PHNETDIST_WORK` and
-  `PHNETDIST_OUT`. Rename any environment settings in existing scripts before
-  running the renamed project.
-- The CLI remains `python run.py`; command arguments, source shapefile names,
-  distance algorithms, numerical parameters and output file formats are
-  unchanged. Existing `work/` and `out/` directories remain subject to the
-  existing source-fingerprint and stage-compatibility validation.
+- GitHub repository, Python distribution, user-facing project name, and GitHub Pages path use `ph-net-distance`.
+- The Python import package uses `ph_net_distance`; this is an import-path change, not an algorithm change.
+- Environment settings use `PH_NET_DISTANCE_DATA`, `PH_NET_DISTANCE_WORK`, and `PH_NET_DISTANCE_OUT`.
+- Existing automation importing the package or setting these environment variables must be updated.
+- The `python run.py` CLI, command arguments, distance algorithms, source shapefile names, and output file formats are unchanged.
 
 ## Unreleased — verification integrity and acquisition provenance
 
@@ -44,7 +39,7 @@ a regression test that fails on the previous code.
   documented `python run.py reduce` (without `--data`) looked in the
   repository's own `data/` folder and stopped. `graph` now records the input
   folder in `work/sources.npz`; later stages reuse it unless `--data` or
-  `PHNETDIST_DATA` is given. A wrong folder gives a message naming
+  `PH_NET_DISTANCE_DATA` is given. A wrong folder gives a message naming
   the recorded one.
 - **`check_setup.py` reports every file again.** It used `run._find`, which
   raises `SystemExit`; the preflight stopped at the first missing file with a
@@ -187,7 +182,7 @@ on the previous code.
 
 ### Improvements
 
-- Standardized repository and import package naming (subsequently renamed to `phnetdist`).
+- Standardized repository and import package naming (subsequently renamed to `ph-net-distance`).
 - Removed machine-specific paths in configuration, tests and VS Code guide;
   introduced portable environment-variable paths and `--data`, `--work`,
   `--out` CLI overrides.

@@ -48,19 +48,19 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config as C
-from phnetdist import graphbuild as gb
-from phnetdist import matrix as mx
-from phnetdist import order as od
-from phnetdist import reduce as rd
-from phnetdist.shpio import dbf_fields, read_dbf, read_shapefile_parts, read_shapefile_points
-from phnetdist.provenance import shapefile_manifest
+from ph_net_distance import graphbuild as gb
+from ph_net_distance import matrix as mx
+from ph_net_distance import order as od
+from ph_net_distance import reduce as rd
+from ph_net_distance.shpio import dbf_fields, read_dbf, read_shapefile_parts, read_shapefile_points
+from ph_net_distance.provenance import shapefile_manifest
 
 ID_PAT = re.compile(r"psgc|adm.*code|^code$|^id$|mun.*code|city.*code", re.I)
 NAME_PAT = re.compile(r"name|adm.*en|mun|city|nam", re.I)
 
 # True when the user named the input folder (--data or the environment
 # variable). Otherwise the later stages reuse the folder recorded by `graph`.
-DATA_EXPLICIT = "PHNETDIST_DATA" in os.environ
+DATA_EXPLICIT = "PH_NET_DISTANCE_DATA" in os.environ
 
 
 class InputError(Exception):
@@ -77,7 +77,7 @@ def _locate(filename: str) -> Path:
     if not root.is_dir():
         raise InputError(
             f"Input directory does not exist: {root}. "
-            "Set PHNETDIST_DATA or use --data to locate the shapefiles."
+            "Set PH_NET_DISTANCE_DATA or use --data to locate the shapefiles."
         )
     pointers = {
         C.ROAD_SHP: ("current_transport.json", "roads"),
@@ -139,7 +139,7 @@ def _adopt_recorded_data_root():
     The byte-level input check below must read the shapefiles again. Without
     this, `python run.py reduce` (as documented, without --data) looked in
     the default data/ folder and stopped. An explicit --data or
-    PHNETDIST_DATA still takes precedence.
+    PH_NET_DISTANCE_DATA still takes precedence.
     """
     with np.load(Path(C.WORK) / "sources.npz") as s:
         recorded = str(s["data_root"]) if "data_root" in s.files else None
@@ -851,12 +851,12 @@ STAGES = {"graph": stage_graph, "reduce": stage_reduce, "matrix": stage_matrix, 
 def _parse():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data", type=Path, default=None,
-                   help="input directory (or set PHNETDIST_DATA); later stages "
+                   help="input directory (or set PH_NET_DISTANCE_DATA); later stages "
                         "default to the directory recorded by `graph`")
     p.add_argument("--work", type=Path, default=None,
-                   help="intermediate directory (or set PHNETDIST_WORK)")
+                   help="intermediate directory (or set PH_NET_DISTANCE_WORK)")
     p.add_argument("--out", type=Path, default=None,
-                   help="output directory (or set PHNETDIST_OUT)")
+                   help="output directory (or set PH_NET_DISTANCE_OUT)")
     p.add_argument("stage", nargs="?", default="all", choices=["all", *STAGES])
     p.add_argument("--workers", type=int, default=None, help="worker processes (0 = cores - 1)")
     p.add_argument("--batch", type=int, default=None, help="sources per Dijkstra call")

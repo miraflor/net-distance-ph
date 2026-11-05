@@ -3,13 +3,13 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "phnetdist"
+name = "ph-net-distance"
 version = "0.1.0"
 description = "Reproducible Philippine municipality/city centroid road-and-ferry shortest-path distances"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{ name = "phnetdist contributors" }]
+authors = [{ name = "ph-net-distance contributors" }]
 dependencies = ["numpy>=1.24,<3", "scipy>=1.11,<2"]
 keywords = ["Philippines", "distance matrix", "routing", "OSM", "ferries", "PSGC"]
 classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: GIS"]
@@ -21,7 +21,7 @@ test = ["pytest>=8", "pyproj>=3.5", "pyshp>=2.3,<3"]
 docs = ["mkdocs-material>=9.5"]
 
 [tool.setuptools.packages.find]
-include = ["phnetdist*"]
+include = ["ph_net_distance*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

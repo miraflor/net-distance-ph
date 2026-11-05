@@ -8,8 +8,8 @@ polygon conversion script requires GeoPandas and its dependencies.
 
 ```bash
 # Clone (after publishing your repository)
-git clone "https://github.com/miraflor/phnetdist.git"
-cd phnetdist
+git clone "https://github.com/miraflor/ph-net-distance.git"
+cd ph-net-distance
 
 # Install and verify
 python -m pip install -e ".[test]"
@@ -71,8 +71,8 @@ python run.py verify --data "/absolute/path/to/external-gis-data"
 ```
 
 To store outputs elsewhere, add `--work /path/to/work --out /path/to/out`
-to each relevant command or set the `PHNETDIST_WORK` and
-`PHNETDIST_OUT` environment variables persistently.
+to each relevant command or set the `PH_NET_DISTANCE_WORK` and
+`PH_NET_DISTANCE_OUT` environment variables persistently.
 
 No automatic download occurs inside the shortest-path runner; instead,
 `build_boundaries.py` and `build_transport.py` fetch sources only when explicitly

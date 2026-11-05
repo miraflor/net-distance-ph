@@ -34,7 +34,7 @@ mixing files from different runs:
 Because the later stages re-read the input shapefiles to compare their hashes,
 they need the input folder. `graph` records the folder it read in
 `work/sources.npz`, and `reduce`, `matrix` and `verify` reuse it when you do
-not pass `--data` (or set `PHNETDIST_DATA`). If you moved the inputs,
+not pass `--data` (or set `PH_NET_DISTANCE_DATA`). If you moved the inputs,
 pass `--data` with the new location; the hashes still decide whether the files
 are the same. For a new snapshot, a fresh `--work` and `--out` directory is
 still the clearest record.

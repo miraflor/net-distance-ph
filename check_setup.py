@@ -7,7 +7,7 @@ import argparse
 from pathlib import Path
 
 import config as C
-from phnetdist.shpio import dbf_fields
+from ph_net_distance.shpio import dbf_fields
 from run import _locate
 
 EXPECTED = {
@@ -63,7 +63,7 @@ def main() -> int:
 
     if not Path(C.DATA).is_dir():
         print("FAIL: the data folder does not exist.")
-        print("Set PHNETDIST_DATA or pass --data with the folder location.")
+        print("Set PH_NET_DISTANCE_DATA or pass --data with the folder location.")
         return 1
 
     failed = False

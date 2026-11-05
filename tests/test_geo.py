@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from phnetdist.geo import (
+from ph_net_distance.geo import (
     A_WGS84,
     B_WGS84,
     F_WGS84,

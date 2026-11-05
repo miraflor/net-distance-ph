@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 import uuid
 import xml.etree.ElementTree as ET
 
-from phnetdist.provenance import sha256_file
+from ph_net_distance.provenance import sha256_file
 
 GEOFABRIK_URL = "https://download.geofabrik.de/asia/philippines-latest.osm.pbf"
 ROAD_CLASSES = ("trunk", "primary", "secondary", "tertiary")
@@ -276,7 +276,7 @@ def _download(url: str, destination: Path):
                 "response_headers": prior.get("response_headers")}
     partial = destination.with_suffix(destination.suffix + ".part")
     with requests.get(url, stream=True, timeout=(30, 900),
-                      headers={"User-Agent": "phnetdist/0.2 (research)"}) as response:
+                      headers={"User-Agent": "ph-net-distance/0.2 (research)"}) as response:
         response.raise_for_status()
         if urlparse(response.url).scheme != "https" or \
                 urlparse(response.url).hostname not in {

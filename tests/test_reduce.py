@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import dijkstra
 
-from phnetdist.reduce import compact, dedupe_edges, reduce_to_core
+from ph_net_distance.reduce import compact, dedupe_edges, reduce_to_core
 
 
 def _dedupe_ref(u, v, w):
@@ -10,7 +10,7 @@ def _dedupe_ref(u, v, w):
 
     scipy's coo -> csr *sums* duplicate entries, so the reference graph has to
     be made simple before it is built, or the oracle itself would be wrong.
-    Deliberately not reusing phnetdist.reduce.dedupe_edges, to keep this an
+    Deliberately not reusing ph_net_distance.reduce.dedupe_edges, to keep this an
     independent check.
     """
     best = {}
