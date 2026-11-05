@@ -1,0 +1,36 @@
+# National-scale input files, unpublished outputs, and intermediate artifacts
+/data/*
+!/data/README.md
+/work/
+/out/
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+*.parquet
+*.pbf
+*.npy
+*.npz
+*.csv
+*.log
+
+# Python / editors
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.vscode/
+.idea/
+
+# Generated documentation
+/site/
+.DS_Store

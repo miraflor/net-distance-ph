@@ -1,0 +1,61 @@
+site_name: phnetdist
+site_url: https://miraflor.github.io/phnetdist/
+repo_url: https://github.com/miraflor/phnetdist
+repo_name: miraflor/phnetdist
+edit_uri: edit/main/docs/
+site_description: Reproducible road-and-ferry shortest-path distance matrices for Philippine municipalities and cities
+site_author: Project contributors
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Input data & identifiers: inputs.md
+  - Methodology: methodology.md
+  - Running the pipeline: pipeline.md
+  - Output & interpretation: outputs.md
+  - Validation & limitations: validation.md
+  - Independent boundary generation: boundaries.md
+  - Independent transport extraction: transport.md
+  - Reproducibility & attribution: reproducibility.md
+  - Engineering notes (historical): engineering-notes.md
+  - FAQ: faq.md
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue grey
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+  font:
+    text: Inter
+    code: Roboto Mono
+extra_css:
+  - assets/custom.css
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - pymdownx.details
+  # Without this custom fence the ```mermaid blocks render as plain code.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.arithmatex:
+      generic: true
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js

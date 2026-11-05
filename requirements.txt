@@ -1,0 +1,2 @@
+# Editable install, including tests. For production-only use: pip install -e .
+-e .[test]

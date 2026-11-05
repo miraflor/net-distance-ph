@@ -1,0 +1,53 @@
+name: Python tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest -q
+
+  geo-conversion:
+    # The whole suite with the optional GIS and transport extras, so the
+    # boundary builder, converter and real-pyosmium PBF tests (skipped in the
+    # job above) run at least once.
+    name: Full suite with optional GIS and transport extras
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e ".[test,geo,transport]"
+      - run: python -m pytest -q
+
+  docs:
+    # Same strict build as the Pages workflow, but on every pull request, so a
+    # broken link is found before it reaches main.
+    name: Documentation build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'mkdocs-material>=9.5,<11'
+      - run: python -m mkdocs build --strict
