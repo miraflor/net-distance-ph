@@ -11,6 +11,7 @@ ALTERNATE = "https://download-openstreetmap.fr/another/philippines.osm.pbf"
 
 
 def test_legacy_cached_pbf_has_unknown_origin(tmp_path):
+    pytest.importorskip("requests")
     cached = tmp_path / "philippines-latest.osm.pbf"
     cached.write_bytes(b"historical snapshot")
     details = _download(ORIGINAL, cached)
@@ -21,6 +22,7 @@ def test_legacy_cached_pbf_has_unknown_origin(tmp_path):
 
 
 def test_known_cached_pbf_refuses_different_source_url(tmp_path):
+    pytest.importorskip("requests")
     cached = tmp_path / "philippines-latest.osm.pbf"
     cached.write_bytes(b"historical snapshot")
     cached.with_suffix(".pbf.acquisition.json").write_text(
