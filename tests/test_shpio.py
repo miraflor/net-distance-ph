@@ -8,7 +8,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mkshp import write_dbf, write_point_shp, write_polyline_shp
 
-from ph_net_distance.shpio import read_dbf, read_shapefile_parts, read_shapefile_points
+from net_distance_ph.shpio import read_dbf, read_shapefile_parts, read_shapefile_points
 
 
 def test_polyline_roundtrip_singlepart():

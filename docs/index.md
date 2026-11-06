@@ -1,8 +1,8 @@
-# ph-net-distance
+# net-distance-ph
 
 ## Distances across an archipelago, without pretending the sea is a road
 
-`ph-net-distance` computes **shortest-path distance, in kilometres, between
+`net-distance-ph` computes **shortest-path distance, in kilometres, between
 Philippine city and municipality reference points** through a combined network
 of road polylines and mapped ferry routes. It is a batch research pipeline,
 not a navigation application, travel-time predictor, or official dataset.

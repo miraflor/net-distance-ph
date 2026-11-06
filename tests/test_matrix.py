@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from scipy.sparse.csgraph import dijkstra
 
-import ph_net_distance.matrix as matrix_module
-from ph_net_distance.matrix import (
+import net_distance_ph.matrix as matrix_module
+from net_distance_ph.matrix import (
     Checkpoint,
     build_csr,
     compute,
@@ -17,14 +17,14 @@ from ph_net_distance.matrix import (
     rcm_reorder,
     save_core,
 )
-from ph_net_distance.order import bfs_order, euclidean_matrix, knn_graph, wave_radii
-from ph_net_distance.reduce import dedupe_edges
+from net_distance_ph.order import bfs_order, euclidean_matrix, knn_graph, wave_radii
+from net_distance_ph.reduce import dedupe_edges
 
 
 def _plain_E(pts):
     """Straight-line distances in the *same units as the edge weights*.
 
-    ph_net_distance.order.euclidean_matrix returns geodesic km, which is right for real
+    net_distance_ph.order.euclidean_matrix returns geodesic km, which is right for real
     lon/lat but meaningless for a unit-square toy graph -- the radii would come
     out ~100x the graph diameter and every wave would resolve everything.
     """

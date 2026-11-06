@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from ph_net_distance.matrix import compute
+from net_distance_ph.matrix import compute
 
 ROOT = Path(__file__).resolve().parents[1]
 

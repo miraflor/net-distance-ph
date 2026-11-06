@@ -1,7 +1,7 @@
 import numpy as np
 
-from ph_net_distance.graphbuild import FERRY, GANGWAY, ROAD, build_graph, connect_ferries, snap_sources
-from ph_net_distance.shpio import Parts
+from net_distance_ph.graphbuild import FERRY, GANGWAY, ROAD, build_graph, connect_ferries, snap_sources
+from net_distance_ph.shpio import Parts
 
 
 def _line(*pts):

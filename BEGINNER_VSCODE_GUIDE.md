@@ -1,4 +1,4 @@
-# Run ph-net-distance in VS Code on Windows
+# Run net-distance-ph in VS Code on Windows
 
 This guide is for a **local** computation. The repository does not include the
 national GIS files or computed matrices.
@@ -6,8 +6,8 @@ national GIS files or computed matrices.
 ## 1. Open the project
 
 Unzip or clone the repository. In VS Code choose **File → Open Folder** and
-select the `ph-net-distance` directory containing `run.py`, `config.py` and
-the `ph_net_distance/` Python package directory.
+select the `net-distance-ph` directory containing `run.py`, `config.py` and
+the `net_distance_ph/` Python package directory.
 
 ## 2. Activate a Python environment
 

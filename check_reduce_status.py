@@ -23,7 +23,7 @@ def age_text(seconds: float) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work", type=Path, default=None,
-                        help="intermediate directory used by run.py (or set PH_NET_DISTANCE_WORK)")
+                        help="intermediate directory used by run.py (or set NET_DISTANCE_PH_WORK)")
     args = parser.parse_args()
     work = (args.work.expanduser().resolve() if args.work is not None else Path(C.WORK))
     log = work / "reduce_progress.log"

@@ -2,9 +2,9 @@
 
 ## Unreleased — repository and package name alignment
 
-- GitHub repository, Python distribution, user-facing project name, and GitHub Pages path use `ph-net-distance`.
-- The Python import package uses `ph_net_distance`; this is an import-path change, not an algorithm change.
-- Environment settings use `PH_NET_DISTANCE_DATA`, `PH_NET_DISTANCE_WORK`, and `PH_NET_DISTANCE_OUT`.
+- GitHub repository, Python distribution, user-facing project name, and GitHub Pages path use `net-distance-ph`.
+- The Python import package uses `net_distance_ph`; this is an import-path change, not an algorithm change.
+- Environment settings use `NET_DISTANCE_PH_DATA`, `NET_DISTANCE_PH_WORK`, and `NET_DISTANCE_PH_OUT`.
 - Existing automation importing the package or setting these environment variables must be updated.
 - The `python run.py` CLI, command arguments, distance algorithms, source shapefile names, and output file formats are unchanged.
 
@@ -39,7 +39,7 @@ a regression test that fails on the previous code.
   documented `python run.py reduce` (without `--data`) looked in the
   repository's own `data/` folder and stopped. `graph` now records the input
   folder in `work/sources.npz`; later stages reuse it unless `--data` or
-  `PH_NET_DISTANCE_DATA` is given. A wrong folder gives a message naming
+  `NET_DISTANCE_PH_DATA` is given. A wrong folder gives a message naming
   the recorded one.
 - **`check_setup.py` reports every file again.** It used `run._find`, which
   raises `SystemExit`; the preflight stopped at the first missing file with a
@@ -182,7 +182,7 @@ on the previous code.
 
 ### Improvements
 
-- Standardized repository and import package naming (subsequently renamed to `ph-net-distance`).
+- Standardized repository and import package naming (subsequently renamed to `net-distance-ph`).
 - Removed machine-specific paths in configuration, tests and VS Code guide;
   introduced portable environment-variable paths and `--data`, `--work`,
   `--out` CLI overrides.

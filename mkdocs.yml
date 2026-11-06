@@ -1,7 +1,7 @@
-site_name: ph-net-distance
-site_url: https://miraflor.github.io/ph-net-distance/
-repo_url: https://github.com/miraflor/ph-net-distance
-repo_name: miraflor/ph-net-distance
+site_name: net-distance-ph
+site_url: https://miraflor.github.io/net-distance-ph/
+repo_url: https://github.com/miraflor/net-distance-ph
+repo_name: miraflor/net-distance-ph
 edit_uri: edit/main/docs/
 site_description: Reproducible road-and-ferry shortest-path distance matrices for Philippine municipalities and cities
 site_author: Project contributors

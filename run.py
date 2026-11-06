@@ -48,19 +48,20 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config as C
-from ph_net_distance import graphbuild as gb
-from ph_net_distance import matrix as mx
-from ph_net_distance import order as od
-from ph_net_distance import reduce as rd
-from ph_net_distance.shpio import dbf_fields, read_dbf, read_shapefile_parts, read_shapefile_points
-from ph_net_distance.provenance import shapefile_manifest
+from net_distance_ph import graphbuild as gb
+from net_distance_ph import matrix as mx
+from net_distance_ph import order as od
+from net_distance_ph import reduce as rd
+from net_distance_ph.shpio import dbf_fields, read_dbf, read_shapefile_parts, read_shapefile_points
+from net_distance_ph.provenance import shapefile_manifest
+from net_distance_ph import workspace as WS
 
 ID_PAT = re.compile(r"psgc|adm.*code|^code$|^id$|mun.*code|city.*code", re.I)
 NAME_PAT = re.compile(r"name|adm.*en|mun|city|nam", re.I)
 
 # True when the user named the input folder (--data or the environment
 # variable). Otherwise the later stages reuse the folder recorded by `graph`.
-DATA_EXPLICIT = "PH_NET_DISTANCE_DATA" in os.environ
+DATA_EXPLICIT = "NET_DISTANCE_PH_DATA" in os.environ
 
 
 class InputError(Exception):
@@ -77,7 +78,7 @@ def _locate(filename: str) -> Path:
     if not root.is_dir():
         raise InputError(
             f"Input directory does not exist: {root}. "
-            "Set PH_NET_DISTANCE_DATA or use --data to locate the shapefiles."
+            "Set NET_DISTANCE_PH_DATA or use --data to locate the shapefiles."
         )
     pointers = {
         C.ROAD_SHP: ("current_transport.json", "roads"),
@@ -139,7 +140,7 @@ def _adopt_recorded_data_root():
     The byte-level input check below must read the shapefiles again. Without
     this, `python run.py reduce` (as documented, without --data) looked in
     the default data/ folder and stopped. An explicit --data or
-    PH_NET_DISTANCE_DATA still takes precedence.
+    NET_DISTANCE_PH_DATA still takes precedence.
     """
     with np.load(Path(C.WORK) / "sources.npz") as s:
         recorded = str(s["data_root"]) if "data_root" in s.files else None
@@ -849,15 +850,24 @@ STAGES = {"graph": stage_graph, "reduce": stage_reduce, "matrix": stage_matrix, 
 
 
 def _parse():
+    global DATA_EXPLICIT
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data", type=Path, default=None,
-                   help="input directory (or set PH_NET_DISTANCE_DATA); later stages "
+                   help="input directory (or set NET_DISTANCE_PH_DATA); later stages "
                         "default to the directory recorded by `graph`")
     p.add_argument("--work", type=Path, default=None,
-                   help="intermediate directory (or set PH_NET_DISTANCE_WORK)")
+                   help="intermediate directory (or set NET_DISTANCE_PH_WORK)")
     p.add_argument("--out", type=Path, default=None,
-                   help="output directory (or set PH_NET_DISTANCE_OUT)")
-    p.add_argument("stage", nargs="?", default="all", choices=["all", *STAGES])
+                   help="output directory (or set NET_DISTANCE_PH_OUT)")
+    p.add_argument("stage", nargs="?", default="all", choices=["prepare", "all", *STAGES])
+    p.add_argument("--workspace", type=Path, default=None,
+                   help="workspace root (default: ~/Documents/net-distance-ph)")
+    p.add_argument("--no-auto-prepare", action="store_true",
+                   help="do not fetch missing sources for graph/all")
+    p.add_argument("--verbose", action="store_true",
+                   help="also display selected manifests and effective settings")
+    p.add_argument("--heartbeat-seconds", type=float, default=30.0,
+                   help="elapsed-time heartbeat interval for long steps (default: 30s)")
     p.add_argument("--workers", type=int, default=None, help="worker processes (0 = cores - 1)")
     p.add_argument("--batch", type=int, default=None, help="sources per Dijkstra call")
     p.add_argument("--waves", type=str, default=None,
@@ -869,6 +879,24 @@ def _parse():
         help="discard the stage-2 checkpoint and restart reduction from stage-1 files",
     )
     a = p.parse_args()
+    if not np.isfinite(a.heartbeat_seconds) or a.heartbeat_seconds <= 0:
+        p.error("--heartbeat-seconds must be a finite positive number")
+    explicit_workspace = a.workspace is not None or "NET_DISTANCE_PH_WORKSPACE" in os.environ
+    a.legacy_paths = not explicit_workspace and (
+        a.data is not None or DATA_EXPLICIT or a.work is not None or a.out is not None
+        or "NET_DISTANCE_PH_WORK" in os.environ or "NET_DISTANCE_PH_OUT" in os.environ
+    )
+    a.workspace = WS.workspace_path(a.workspace)
+    wpaths = WS.paths(a.workspace)
+    if not a.legacy_paths:
+        if a.data is None and not DATA_EXPLICIT:
+            C.DATA = wpaths["data"]
+        if a.work is None and "NET_DISTANCE_PH_WORK" not in os.environ:
+            C.WORK = wpaths["work"]
+        if a.out is None and "NET_DISTANCE_PH_OUT" not in os.environ:
+            C.OUT = wpaths["output"]
+    a.log_root = (a.work.expanduser().resolve() if a.work is not None else Path(C.WORK)) if a.legacy_paths else a.workspace
+    a.auto_prepare = not a.legacy_paths and not DATA_EXPLICIT and a.data is None and not a.no_auto_prepare
     if a.workers is not None and a.workers < 0:
         p.error("--workers must be 0 (automatic) or a positive integer")
     if a.batch is not None and a.batch < 1:
@@ -876,7 +904,6 @@ def _parse():
     if a.wave_scale is not None and (not np.isfinite(a.wave_scale) or a.wave_scale <= 0):
         p.error("--wave-scale must be a finite positive number")
     if a.data is not None:
-        global DATA_EXPLICIT
         DATA_EXPLICIT = True
         C.DATA = a.data.expanduser().resolve()
     if a.work is not None:
@@ -895,8 +922,39 @@ def _parse():
 
 if __name__ == "__main__":
     args = _parse()
-    if args.stage == "all":
-        for fn in STAGES.values():
-            fn(args)
-    else:
-        STAGES[args.stage](args)
+    try:
+        with WS.run_log(args.log_root):
+            print(f"Workspace: {args.workspace if not args.legacy_paths else 'legacy explicit-path mode'}")
+            print(f"Session logs: {args.log_root / 'logs'}")
+            print(f"Data: {Path(C.DATA).resolve()}")
+            print(f"Work/checkpoints: {Path(C.WORK).resolve()}")
+            print(f"Outputs: {Path(C.OUT).resolve()}")
+            print(f"Command: {args.stage}; automatic source preparation: "
+                  f"{args.stage in ('all', 'graph') and args.auto_prepare}")
+            if args.verbose:
+                print(f"Settings: workers={args.workers if args.workers is not None else C.N_WORKERS}, "
+                      f"batch={args.batch if args.batch is not None else C.BATCH_SIZE}, "
+                      f"geodesic={C.GEODESIC_BACKEND}, "
+                      f"ferry_connector_km={C.FERRY_CONNECT_KM}, "
+                      f"point_snap_km={C.MAX_CENTROID_SNAP_KM}")
+            if args.stage == "prepare":
+                with WS.timed_step("prepare sources", args.heartbeat_seconds):
+                    WS.prepare_sources(C.DATA, heartbeat_seconds=args.heartbeat_seconds)
+            else:
+                if args.stage in ("all", "graph") and args.auto_prepare:
+                    with WS.timed_step("prepare sources", args.heartbeat_seconds):
+                        WS.prepare_sources(C.DATA, heartbeat_seconds=args.heartbeat_seconds)
+                todo = STAGES.items() if args.stage == "all" else [(args.stage, STAGES[args.stage])]
+                for name, fn in todo:
+                    with WS.timed_step(name, args.heartbeat_seconds):
+                        fn(args)
+            if args.verbose:
+                for pointer in ("current_boundaries.json", "current_transport.json"):
+                    path = Path(C.DATA) / pointer
+                    if path.is_file():
+                        print(f"Selected source: {pointer}: {path.read_text(encoding='utf-8').strip()}")
+            print(f"FINISHED: {args.stage}; workspace={args.workspace}")
+    except KeyboardInterrupt:
+        raise SystemExit(130)
+    except (RuntimeError, OSError, ImportError) as exc:
+        raise SystemExit(f"Run stopped: {exc}") from None

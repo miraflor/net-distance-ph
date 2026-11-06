@@ -36,7 +36,7 @@ KIND_CITY = {"city", "cty", "huc", "icc", "cc", "highly urbanized city", "indepe
 KIND_MUN = {"mun", "municipality", "municipal"}
 KIND_PROV = {"prov", "province"}
 ALLOWED_HOSTS = {"psa.gov.ph", "www.geoboundaries.org", "github.com", "raw.githubusercontent.com", "media.githubusercontent.com"}
-USER_AGENT = {"User-Agent": "ph-net-distance/0.1 (research reproducibility)"}
+USER_AGENT = {"User-Agent": "net-distance-ph/0.1 (research reproducibility)"}
 INCOMPLETE_DIR = "boundary_build_incomplete"
 
 

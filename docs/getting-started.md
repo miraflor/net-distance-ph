@@ -8,8 +8,8 @@ polygon conversion script requires GeoPandas and its dependencies.
 
 ```bash
 # Clone (after publishing your repository)
-git clone "https://github.com/miraflor/ph-net-distance.git"
-cd ph-net-distance
+git clone "https://github.com/miraflor/net-distance-ph.git"
+cd net-distance-ph
 
 # Install and verify
 python -m pip install -e ".[test]"
@@ -20,7 +20,47 @@ Dependencies are specified in
 `pyproject.toml`. On Windows, PowerShell accepts the same quoted pip extras
 and commands.
 
-## Prepare files
+## Automatic source preparation (recommended)
+
+Install the optional source-builder requirements and start the full workflow:
+
+```powershell
+python -m pip install -e ".[test,geo,transport,docs]"
+python run.py all --workers 4 --verbose
+```
+
+Without `--data` or `NET_DISTANCE_PH_DATA`, `all` and `graph` first generate
+missing municipality origins from PSA PSGC and geoBoundaries, and road/ferry
+layers from the Geofabrik Philippines OSM extract. Input snapshots, versioned
+releases, checkpoints, computed matrices and timestamped logs live in:
+
+```text
+~/Documents/net-distance-ph/
+  data/      # upstream sources, audit, versioned selected releases
+  work/      # resumable graph and matrix checkpoints
+  output/    # CSV/NPY matrices, reports and verification
+  logs/      # run-YYYYMMDD-HHMMSS-PID.log
+```
+
+`python run.py prepare --verbose` runs *only* the input builders. Complete
+selected releases are reused on subsequent runs; they are not silently
+refreshed or replaced. `--workspace PATH` changes the root; explicit `--data`
+(or `NET_DISTANCE_PH_DATA`) disables automatic acquisition for `all`/`graph`
+so existing custom input workflows remain supported. `--no-auto-prepare`
+also disables automatic acquisition. The `--heartbeat-seconds N` option
+controls elapsed-time liveness messages; all console lines are timestamped and
+mirrored to the session log. Even during long operations, heartbeat messages
+show that the process is running without inventing numeric progress.
+
+**Data-vintage caution:** the default PSA Q2 2026 locality roster and the
+older geoBoundaries polygons are not guaranteed to reconcile automatically.
+If a boundary build stops, review `data/boundary_build_incomplete/` inside the
+workspace and use the explicit builder overrides described in
+[Boundary generation](boundaries.md). The workflow intentionally does not
+assume or fabricate polygon matches. National-scale build completion and
+full routing network quality have not yet been independently verified.
+
+## Prepare files (existing shapefiles)
 
 You can [construct origin points from administrative boundaries](boundaries.md)
 and [extract roads/ferries from OpenStreetMap](transport.md) directly, or use
@@ -71,12 +111,12 @@ python run.py verify --data "/absolute/path/to/external-gis-data"
 ```
 
 To store outputs elsewhere, add `--work /path/to/work --out /path/to/out`
-to each relevant command or set the `PH_NET_DISTANCE_WORK` and
-`PH_NET_DISTANCE_OUT` environment variables persistently.
+to each relevant command or set the `NET_DISTANCE_PH_WORK` and
+`NET_DISTANCE_PH_OUT` environment variables persistently.
 
-No automatic download occurs inside the shortest-path runner; instead,
-`build_boundaries.py` and `build_transport.py` fetch sources only when explicitly
-invoked. Stage 1 can require significant memory;
+With explicit `--data`, source acquisition is opt-in; the default workspace-first
+`all` and `graph` commands automatically invoke the source builders if needed.
+Stage 1 can require significant memory;
 the reduction stage is CPU-intensive and saves resumable checkpoints.
 
 ## Optional: generate centroids from boundaries

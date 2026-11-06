@@ -1,4 +1,4 @@
-# ph-net-distance
+# net-distance-ph
 
 **Reproducible road-and-ferry shortest-path distances between Philippine cities and municipalities.**
 
@@ -9,7 +9,7 @@ in kilometres. It is designed for national-scale runs with resumable stages,
 clear row/column identifiers, and empirical verification against the original
 unreduced graph.
 
-**[Documentation (GitHub Pages after deployment)](https://miraflor.github.io/ph-net-distance/)** ·
+**[Documentation (GitHub Pages after deployment)](https://miraflor.github.io/net-distance-ph/)** ·
 [Methodology](docs/methodology.md) · [Inputs](docs/inputs.md) ·
 [Independent boundary generation](docs/boundaries.md) ·
 [Independent transport extraction](docs/transport.md) · [Validation](docs/validation.md)
@@ -19,11 +19,26 @@ unreduced graph.
 Python 3.11 or newer; run from the repository root:
 
 ```bash
-python -m pip install -e ".[test]"
+python -m pip install -e ".[test,geo,transport,docs]"
 python -m pytest -q
-python check_setup.py --data "/path/to/shapefiles"
-python run.py all --data "/path/to/shapefiles" --workers 4
+# Automatically acquires missing PSA/geoBoundaries + OSM inputs into Documents
+python run.py all --workers 4 --verbose
+# Or prepare sources only (no matrix computation): python run.py prepare --verbose
 ```
+
+By default, a persistent workspace is created at
+`~/Documents/net-distance-ph/` with `data/` (source cache and releases),
+`work/` (graph and checkpoints), `output/` (matrices), and `logs/` (timestamped
+run logs). Existing valid source releases are reused. A first national build
+requires internet and can halt for manual reconciliation of unmatched 2026 PSGC
+and older geoBoundaries records; it will not silently invent matches.
+
+Use `--workspace PATH` to select another workspace, `--no-auto-prepare` to
+require pre-existing sources, and `--heartbeat-seconds N` to change the
+30-second liveness updates. `python run.py prepare` only prepares the sources.
+All stage messages are timestamped in the console and the session log.
+
+### Existing shapefiles (advanced)
 
 The input directory must contain these WGS84 shapefiles (subfolders are allowed):
 
@@ -34,8 +49,8 @@ The input directory must contain these WGS84 shapefiles (subfolders are allowed)
 | Locality points | `muncity_centroids.shp` | Matrix origin/destination points, text IDs and labels |
 
 Configure input, work and output locations using `--data`, `--work`, `--out`,
-or the `PH_NET_DISTANCE_DATA`, `PH_NET_DISTANCE_WORK`, and
-`PH_NET_DISTANCE_OUT` environment variables. Default paths are `data/`,
+or the `NET_DISTANCE_PH_DATA`, `NET_DISTANCE_PH_WORK`, and
+`NET_DISTANCE_PH_OUT` environment variables. Default paths are `data/`,
 `work/`, and `out/` under the project root. The three source filenames,
 parameters and stages remain configurable in `config.py`.
 
@@ -60,7 +75,7 @@ CSV blanks likewise do not distinguish these two cases. See the
 
 ## Acquire source data independently
 
-The project includes two optional standalone preparation tools. They acquire upstream
+The default `python run.py all` automatically invokes the two independent source builders when inputs are missing. They also remain available as standalone tools and acquire upstream
 public geographic sources directly, without imports from any other research project.
 
 **A. City and municipality boundaries and origin points** (PSA PSGC + geoBoundaries):

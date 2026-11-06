@@ -1,5 +1,17 @@
 # Running the four-stage pipeline
 
+The default entry point, `python run.py all`, first prepares missing inputs
+from independent upstream sources in `~/Documents/net-distance-ph/data/` and
+then executes the four graph/matrix stages below. Use
+`python run.py prepare` to acquire and reconcile sources without computing the
+matrix. `--workspace` selects a different persistent workspace. If `--data`
+is explicitly supplied (or `NET_DISTANCE_PH_DATA` is set), the existing
+shapefile workflow is preserved and no automatic acquisition takes place.
+
+All console output is timestamped and copied to the workspace's `logs/`
+directory. Each long step emits elapsed-time heartbeat messages; this is
+liveness information, not a claim about numerical progress.
+
 ## Execution plan
 
 ```mermaid
@@ -34,7 +46,7 @@ mixing files from different runs:
 Because the later stages re-read the input shapefiles to compare their hashes,
 they need the input folder. `graph` records the folder it read in
 `work/sources.npz`, and `reduce`, `matrix` and `verify` reuse it when you do
-not pass `--data` (or set `PH_NET_DISTANCE_DATA`). If you moved the inputs,
+not pass `--data` (or set `NET_DISTANCE_PH_DATA`). If you moved the inputs,
 pass `--data` with the new location; the hashes still decide whether the files
 are the same. For a new snapshot, a fresh `--work` and `--out` directory is
 still the clearest record.
