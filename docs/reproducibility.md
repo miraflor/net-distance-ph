@@ -51,7 +51,9 @@ OSM/administrative source files for long-term reproducibility.
   provides ADM3 boundary geometry in its open offering; cite the exact dataset
   metadata, original contributing boundary sources and relevant license.
 
-The GitHub repository intentionally omits national raw GIS files, intermediate
+The GitHub repository **includes the official PSA PSGC Q2 2026 XLSX and derived JSON**
+under `reference/psgc/`, with SHA-256 source attribution. It intentionally omits other
+national raw GIS files, intermediate
 networks and final distance matrices. **Publishing computed distance matrices
 may itself raise database-license and attribution questions**; do not assume
 that distributing code automatically gives permission to distribute data.

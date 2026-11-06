@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 PSA_Q2_2026 = "https://psa.gov.ph/system/files/scd/PSGC-2Q-2026-Publication-Datafile.xlsx"
+BUNDLED_PSGC_JSON = Path(__file__).resolve().parents[1] / "reference" / "psgc" / "psgc_q2_2026_localities.json"
 GEOBOUNDARIES_ADM3 = "https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM3/"
 GEOBOUNDARIES_ADM2 = "https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/"
 PSA_COLUMNS = {"code": "psgc_code", "name": "name", "kind": "kind", "province": "province"}
@@ -91,6 +92,27 @@ def _column(frame, preferred: str | None, candidates: tuple[str, ...], *, requir
 
 def _psgc_raw(path: Path, sheet: str | None):
     import pandas as pd
+    if path.suffix.lower() == ".json":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("schema") != "net-distance-ph/psgc-localities/v1":
+            raise ValueError("PSGC JSON must use net-distance-ph/psgc-localities/v1 schema")
+        metadata = payload.get("source", {})
+        if metadata.get("publication_date") != "2026-06-30":
+            raise ValueError("PSGC JSON has an unexpected publication date")
+        workbook = path.with_name(str(metadata.get("filename", "")))
+        if not workbook.is_file() or sha256(workbook) != metadata.get("sha256"):
+            raise ValueError("PSGC JSON does not match its original checked-in XLSX (SHA-256)")
+        records = payload.get("localities")
+        counts = payload.get("counts", {})
+        if (not isinstance(records, list) or len(records) != 1642 or
+                counts.get("city") != 149 or counts.get("municipality") != 1493 or
+                counts.get("total") != 1642):
+            raise ValueError("PSGC JSON locality counts are inconsistent")
+        if any(not isinstance(row, dict) or
+               not {"psgc_code", "name", "kind", "province"}.issubset(row)
+               for row in records):
+            raise ValueError("PSGC JSON locality record has missing fields")
+        return pd.DataFrame(records, dtype=str)
     if path.suffix.lower() == ".csv":
         # Never infer codes as integers: leading zeros are meaningful.
         return pd.read_csv(path, dtype=str, keep_default_na=False)
@@ -364,9 +386,14 @@ def build(args):
     if args.psgc:
         psgc_path = args.psgc.expanduser().resolve()
     else:
-        psgc_path = downloads / "psgc_q2_2026_publication_datafile.xlsx"
-        if not psgc_path.exists():
-            _save_remote(PSA_Q2_2026, psgc_path)
+        # The official PSA XLSX and exact, validated JSON conversion are checked
+        # into the repository. Never depend on the blocked live PSA XLSX URL.
+        psgc_path = BUNDLED_PSGC_JSON
+        if not psgc_path.is_file():
+            raise FileNotFoundError(
+                f"Pinned PSA Q2 2026 roster missing from repository: {psgc_path}. "
+                "Restore reference/psgc or specify --psgc CSV/XLSX/JSON."
+            )
     if args.adm3:
         adm3_path = args.adm3.expanduser().resolve()
     else:
@@ -416,6 +443,8 @@ def build(args):
         "status": "complete" if complete else "incomplete",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "psgc_source": str(psgc_path), "psgc_sha256": sha256(psgc_path),
+        "psgc_original_xlsx_sha256": (json.loads(psgc_path.read_text(encoding="utf-8"))["source"]["sha256"]
+                                      if psgc_path.suffix.lower() == ".json" else None),
         "adm3_source": str(adm3_path), "adm3_sha256": sha256(adm3_path),
         "adm2_source": str(adm2_path) if adm2_path else None,
         "adm2_sha256": sha256(adm2_path) if adm2_path else None,
@@ -527,7 +556,7 @@ def build(args):
 
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--psgc", type=Path, help="Local official PSGC CSV/XLSX; omit to download PSA Q2 2026 XLSX")
+    parser.add_argument("--psgc", type=Path, help="Optional custom PSGC CSV/XLSX or pinned-roster JSON; default uses reference/psgc")
     parser.add_argument("--psgc-sheet", help="Excel worksheet to use; otherwise detect header in any sheet")
     parser.add_argument("--adm3", type=Path, help="Local ADM3 polygons; omit to download geoBoundaries PHL ADM3")
     parser.add_argument("--adm3-layer", help="Layer name for local ADM3 GeoPackage")

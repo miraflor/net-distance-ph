@@ -75,6 +75,12 @@ CSV blanks likewise do not distinguish these two cases. See the
 
 ## Acquire source data independently
 
+The official PSA PSGC Q2 2026 workbook is **pinned in** [`reference/psgc/`](reference/psgc/README.md),
+with a complete compressed JSON Lines conversion and a validated 1,642-locality JSON roster.
+The boundary builder uses the JSON roster automatically (no PSA HTTP request); run
+`python scripts/convert_psgc.py --check` to verify it against the original XLSX.
+geoBoundaries polygons and OSM road/ferry extracts are still acquired separately.
+
 The default `python run.py all` automatically invokes the two independent source builders when inputs are missing. They also remain available as standalone tools and acquire upstream
 public geographic sources directly, without imports from any other research project.
 

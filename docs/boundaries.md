@@ -27,7 +27,7 @@ Administrative boundaries and the *road/ferry transport network* are prepared in
 
 ## Upstream sources and their different dates
 
-1. **PSA PSGC:** Official locality codes and names. By default the new builder attempts to fetch the [PSGC Q2 2026 publication workbook](https://psa.gov.ph/system/files/scd/PSGC-2Q-2026-Publication-Datafile.xlsx), linked from [PSA's Q2 announcement](https://psa.gov.ph/content/second-quarter-2026-psgc-updates-renaming-one-municipality-and-one-barangay-and-correction). The selected official roster contains **1,493 municipalities and 149 cities**.
+1. **PSA PSGC:** Official locality codes and names. The [original PSA Q2 2026 publication workbook](https://psa.gov.ph/system/files/scd/PSGC-2Q-2026-Publication-Datafile.xlsx) is now **pinned in this repository** at `reference/psgc/` together with a validated machine-readable JSON roster. The default builder reads the checked-in JSON rather than relying on the sometimes-blocked PSA download URL. The roster contains **1,493 municipalities and 149 cities**.
 2. **geoBoundaries ADM3:** Municipality/city polygons from the [PHL/ADM3 metadata endpoint](https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM3/). At the time of writing its current API reports **1,647 source units** and `boundaryYearRepresented: 2020`, so its geometry vintage **does not match** the 2026 PSGC roster. The builder retrieves the **simplified** geometry URL from the API metadata.
 3. **geoBoundaries ADM2:** Province polygons from [PHL/ADM2](https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/), used only to disambiguate repeated locality names. If a source boundary lacks an explicit province field, the builder assigns a *candidate* province using the largest area of overlap with an ADM2 polygon.
 
@@ -40,9 +40,9 @@ python -m pip install -e ".[geo]"
 python scripts/build_boundaries.py --output data
 ```
 
-This command attempts to download the pinned PSA Q2 2026 XLSX and discover current geoBoundaries ADM3/ADM2 geometries, then reconcile them. It **may stop for manual review**: it is neither reasonable nor safe to pretend that two vintages match perfectly by name or feature order. Network access is required on first download.
+This command reads the pinned PSA Q2 2026 JSON roster from `reference/psgc/` and downloads or reuses current geoBoundaries ADM3/ADM2 geometries, then reconciles them. It **may stop for manual review**: it is neither reasonable nor safe to pretend that two vintages match perfectly by name or feature order. Network access is required on first download.
 
-**Reproducible pinned runs:** the PSA workbook URL is pinned to Q2 2026 (the URL, not the file content: the provenance file records the SHA-256 of what was actually downloaded), but geoBoundaries' `/current/` metadata is *moving*. The first run saves the downloaded geometry files in `data/sources/` together with the API metadata that describes them (`geoboundaries_phl_adm3_metadata.json`, `..._adm2_metadata.json`); later runs reuse both without contacting the API, and the provenance file records their SHA-256 hashes. For publication-quality replication, archive those files securely and supply them again using `--adm3` and `--adm2`. The tool does not overwrite cached downloads automatically.
+**Reproducible pinned runs:** the **actual PSA Q2 2026 XLSX bytes** and its SHA-256, plus derived JSON, are pinned in `reference/psgc/`; geoBoundaries' `/current/` metadata is still *moving*. The first run saves the downloaded geometry files in `data/sources/` together with the API metadata that describes them (`geoboundaries_phl_adm3_metadata.json`, `..._adm2_metadata.json`); later runs reuse both without contacting the API, and the provenance file records their SHA-256 hashes. For publication-quality replication, archive those files securely and supply them again using `--adm3` and `--adm2`. The tool does not overwrite cached downloads automatically.
 
 ### Use explicit local upstream snapshots
 
@@ -54,7 +54,7 @@ python scripts/build_boundaries.py \
   --output data
 ```
 
-For a custom PSA table, export a CSV containing `psgc_code,name,kind,province` with **PSGC codes as text**. `kind` must be `city` or `municipality`. An official workbook's worksheet/header layout can differ from release to release; the loader detects common headers and otherwise stops with a clear error instead of guessing.
+The repository also contains a full `psgc_q2_2026_all.jsonl.gz` extraction of all PSGC worksheet geographic records, including two source rows without a geographic level. Regenerate/verify with `python scripts/convert_psgc.py --check`. For a custom PSA table, export a CSV containing `psgc_code,name,kind,province` with **PSGC codes as text**. `kind` must be `city` or `municipality`. An official workbook's worksheet/header layout can differ from release to release; the loader detects common headers and otherwise stops with a clear error instead of guessing.
 
 ### Reconciling records
 

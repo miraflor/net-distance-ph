@@ -22,6 +22,11 @@ and commands.
 
 ## Automatic source preparation (recommended)
 
+The PSA Q2 2026 workbook and derived JSON are stored in the repository
+under `reference/psgc/`. The boundary builder reads that JSON by default;
+a live PSA download is **not** required. geoBoundaries and OSM still
+require a network connection on the first build.
+
 Install the optional source-builder requirements and start the full workflow:
 
 ```powershell
