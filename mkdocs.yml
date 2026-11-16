@@ -11,6 +11,7 @@ nav:
   - Input data & identifiers: inputs.md
   - Methodology: methodology.md
   - Running the pipeline: pipeline.md
+  - Connectivity preflight: connectivity.md
   - Output & interpretation: outputs.md
   - Validation & limitations: validation.md
   - Independent boundary generation: boundaries.md

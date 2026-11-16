@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — explicit connectivity audit CLI
+
+- Added `python run.py connectivity` and `net-distance-ph-connectivity`.
+- Reports official PSGC coverage, snapped towns, connected components and
+  ferry-assisted reachability from stage-1 graph files. No all-pairs Dijkstra.
+- The audit is opt-in; `python run.py all` retains its original four stages.
+- Added synthetic unit tests; no nationwide connectivity is claimed.
+
 This records software development, not a completed or independently verified national run. Synthetic fixtures are not national empirical findings.
 
 ## Unreleased — repository and package name alignment

@@ -846,7 +846,32 @@ def stage_verify(args):
         raise SystemExit("VERIFICATION FAILED:\n  " + "\n  ".join(failures))
 
 
-STAGES = {"graph": stage_graph, "reduce": stage_reduce, "matrix": stage_matrix, "verify": stage_verify}
+def stage_connectivity(args):
+    """Audit locality reachability using only existing stage-1 files."""
+    from types import SimpleNamespace
+    from net_distance_ph import connectivity as conn
+
+    work = Path(C.WORK)
+    graph = work / "graph_full.npz"
+    sources = work / "sources.npz"
+    if not graph.is_file() or not sources.is_file():
+        raise SystemExit(
+            f"NOT READY: connectivity needs both {graph} and {sources}.\n"
+            "Build the stage-1 graph first: python run.py graph --verbose"
+        )
+    _require_stage1_current()  # fail closed on changed inputs or graph settings
+    status = conn.execute(
+        SimpleNamespace(repo=Path(__file__).resolve().parent,
+                        workspace=args.workspace, skip_provenance=False),
+        work_override=work,
+        output_override=Path(C.OUT) / "connectivity_audit",
+        verified_from_caller=True,
+    )
+    if status:
+        raise SystemExit(status)
+
+
+STAGES = {"graph": stage_graph, "connectivity": stage_connectivity, "reduce": stage_reduce, "matrix": stage_matrix, "verify": stage_verify}
 
 
 def _parse():
@@ -944,7 +969,9 @@ if __name__ == "__main__":
                 if args.stage in ("all", "graph") and args.auto_prepare:
                     with WS.timed_step("prepare sources", args.heartbeat_seconds):
                         WS.prepare_sources(C.DATA, heartbeat_seconds=args.heartbeat_seconds)
-                todo = STAGES.items() if args.stage == "all" else [(args.stage, STAGES[args.stage])]
+                # Keep `all` backward compatible; connectivity is an explicit preflight.
+                todo = ([(name, STAGES[name]) for name in ("graph", "reduce", "matrix", "verify")]
+                        if args.stage == "all" else [(args.stage, STAGES[args.stage])])
                 for name, fn in todo:
                     with WS.timed_step(name, args.heartbeat_seconds):
                         fn(args)

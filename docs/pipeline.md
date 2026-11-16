@@ -120,6 +120,9 @@ Do not interpret an `inf` entry from an incomplete run as geographic
 unreachability. [Output semantics](outputs.md) explains exactly how to tell
 these apart.
 
+For the optional, non-distance preflight, run `python run.py connectivity`
+after `graph` and before `reduce`. See [connectivity](connectivity.md).
+
 ## Resource use and expected scale
 
 The official Q2 2026 roster lists 1,642 localities, but actual graph size and performance are unmeasured until a new run. Runtime depends on topology, memory, storage, and worker configuration. No inherited speed benchmark should be used as an estimate.

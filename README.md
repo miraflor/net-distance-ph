@@ -62,6 +62,25 @@ python run.py matrix --data "/path/to/shapefiles" --workers 4    # resumable mat
 python run.py verify --data "/path/to/shapefiles"                # compares with unreduced graph
 ```
 
+## Connectivity preflight (before the distance matrix)
+
+The connectivity audit is **not** a national result until you run it on your
+own completed stage-1 graph. It checks the 1,642 Q2 2026 official PSGC towns,
+snapping, and road-only versus combined road/ferry components. It does **not**
+calculate all-pairs shortest-path distances or automatically download inputs.
+
+```powershell
+python -m pytest tests/test_connectivity.py tests/test_connectivity_cli.py -q
+python run.py graph --verbose            # prepares missing sources if needed
+python run.py connectivity --verbose     # only analyzes stage-1 outputs
+```
+
+Alternatively, after `python -m pip install -e .`, run
+`net-distance-ph-connectivity` or `python -m net_distance_ph.connectivity`.
+Outputs go into the workspace's `output/connectivity_audit/` directory.
+A nonzero exit status indicates unproven connectivity or missing inputs;
+see [connectivity guidance](docs/connectivity.md).
+
 ## Main outputs
 
 `out/distance_matrix_km.npy` and `.csv` contain the distances (kilometres);
