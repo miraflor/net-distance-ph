@@ -10,3 +10,4 @@
 *.gpkg binary
 *.npy binary
 *.npz binary
+reference/psgc/*.json text eol=lf
