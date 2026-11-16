@@ -82,6 +82,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--publish", action="store_true", help="after validation, publish a complete boundary release")
     p.add_argument("--replace", action="store_true", help="explicitly replace an existing selected boundary release (requires --publish)")
 
+    p = sub.add_parser("diagnose-connectivity", help="inspect nearest graph-vertex gaps without modifying the saved graph")
+    p.add_argument("--workspace", type=Path, metavar="PATH", help="workspace root")
+    p.add_argument("--boundary-level", choices=LEVELS, default="town", help="level of existing saved graph (default: town)")
+    p.add_argument("--top", type=int, default=20, metavar="N", help="how many smallest gaps to print")
+
     p = sub.add_parser("run", help="execute a controlled, stop-on-failure range of stages")
     _add_shared(p, stage="run")
     selectors = p.add_mutually_exclusive_group(required=True)
@@ -274,6 +279,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         return _doctor(args)
     try:
+        if args.command == "diagnose-connectivity":
+            from .connectivity_diagnostics import run as run_diagnostics
+            return run_diagnostics(workspace=_effective_workspace(args), top=args.top)
         if args.command == "boundaries":
             from .boundaries import run as run_boundaries
             return run_boundaries(workspace=_effective_workspace(args), source=args.source,

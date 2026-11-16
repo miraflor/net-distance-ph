@@ -85,3 +85,7 @@ interface, as is `net-distance-ph-connectivity`.
 package import availability and input file headers but is not a geographic
 accuracy audit. For rigorous national publication, retain input provenance,
 review long centroid snaps and ferry terminals, and run final verification.
+
+## Inspect disconnected graph topology (read only)
+
+`net-distance-ph diagnose-connectivity --top 43` reads the existing stage-1 graph and reports candidate intercomponent road-vertex gaps without editing graph or sources. See [Connectivity diagnostics](connectivity_diagnostics.md).
