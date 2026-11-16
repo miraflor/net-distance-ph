@@ -32,7 +32,7 @@ python scripts/build_transport.py --pbf "data/sources/philippines-latest.osm.pbf
 For a fresh source file replacing a cached `*-latest` download, archive the existing file and download a new snapshot deliberately. There is no automatic silent refresh. To publish a new derived transport release while preserving the previous release:
 
 ```bash
-python scripts/build_transport.py --pbf "data/sources/philippines-latest.osm.pbf" --output data --replace
+python scripts/build_transport.py --pbf "data/sources/philippines-latest.osm.pbf" --output data --road-profile comprehensive --replace
 ```
 
 `--replace` changes the **selected release pointer**, not the existing versioned release directory. A 64-character SHA-256 can be supplied to prevent accidentally using a different snapshot.
@@ -43,14 +43,14 @@ A tiny `.osm` XML fixture is also accepted for testing; this path is not designe
 
 | Output | Default OSM selection | Interpretation |
 | --- | --- | --- |
-| `primsectertrunk_road.shp` | `highway=trunk`, `primary`, `secondary`, or `tertiary` | The four historical road classes (not all driveable streets) |
+| `primsectertrunk_road.shp` | Default `comprehensive`: trunk, primary, secondary, tertiary, unclassified, residential, motorway, service, living_street, and five road `_link` classes | Fourteen tagged classes (not legal/directional routing); use `--road-profile major` for the former four-class baseline |
 | `ferry_route_shape.shp` | Ways tagged `route=ferry`; plus *route* member ways of `type=route` + `route=ferry` relations (see below) | Mapped ferry geometries, not verified live ferry services |
 
 This is a **defined new extraction recipe**, not a claim to reproduce a historical Geofabrik shapefile byte-for-byte. The original shapefile may have used other tag, date, clipping or cleanup criteria.
 
-Road `_link` classes are omitted by default. Use `--include-links` to add `trunk_link`, `primary_link`, `secondary_link` and `tertiary_link` and record the changed graph specification. Residential/service roads, tracks and paths are not included.
+The **default `comprehensive` profile** includes expressways (including NLEX/SLEX), ramps and connector roads, local residential roads, service roads, and living streets. It excludes pedestrian paths, tracks, cycleways, and other non-motor-road classes. An explicitly recorded `motorcar`, `motor_vehicle`, `vehicle`, or `access` tag of `no`, `private`, `agricultural`, `forestry`, or `delivery` excludes a road, with the more-specific tag taking precedence. `destination`, `customers` and conditional permissions are not fully modeled; **the resulting graph is not a legally verified car router**. One-way restrictions and turn restrictions also remain unmodeled.
 
-**Expressways are not included by default.** Under the Philippine OSM classification, all tolled expressways (NLEX, SLEX, TPLEX, SCTEX, CALAX and others) are tagged `highway=motorway`, so the default network routes along the parallel trunk roads. This matches the four-class historical network. `--include-motorways` adds `motorway` and `motorway_link` (the ramps, without which motorways would not connect to the rest of the network). The output file keeps the name `primsectertrunk_road.shp`; the provenance records the actual class list. Different class choices change connectivity and shortest-path distances.
+For the historical major-road-only class selection use `--road-profile major`. Because access filtering is new, a re-extraction is not necessarily byte-identical to the earlier four-class release; the original immutable release is retained for exact reference. With that profile `--include-links` and `--include-motorways` retain their former opt-in meanings. The file keeps its historical `primsectertrunk_road.shp` name regardless of profile, while `transport_provenance.json` and each road DBF preserve the exact classes and way-level `OSM_CLASS` attributes. See [road profiles](road_profiles.md).
 
 **Which members of a ferry relation count as the crossing.** A ferry route relation usually lists more than the sea crossing: approach roads, terminal platforms and pier outlines. Each member carries a *role* label, empty for the route line itself and `platform` or `stop` for terminals. A member way is taken as a ferry line only if its role is empty, `forward` or `backward`; it has no `highway` tag; it has no facility tag (`public_transport`, `amenity`, `man_made`, `building`); it is not `area=yes`; and it is not a closed ring. A `highway`-tagged member keeps its road class (or is left out if that class is not selected). The PBF scan prints how many members each excluded role had. Without these rules, a platform polygon became a closed "ferry route" ring with a gangway candidate, and an approach road was moved from the road layer into the ferry layer.
 

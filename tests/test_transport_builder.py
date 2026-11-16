@@ -77,7 +77,7 @@ def _args(tmp_path, **overrides):
         "pbf": osm, "download": False, "source_url": None,
         "expected_sha256": None, "output": tmp_path / "data",
         "include_links": False, "allow_no_ferries": False,
-        "replace": False, **overrides,
+        "road_profile": "major", "replace": False, **overrides,
     })
 
 

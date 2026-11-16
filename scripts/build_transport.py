@@ -26,9 +26,45 @@ import xml.etree.ElementTree as ET
 from net_distance_ph.provenance import sha256_file
 
 GEOFABRIK_URL = "https://download.geofabrik.de/asia/philippines-latest.osm.pbf"
-ROAD_CLASSES = ("trunk", "primary", "secondary", "tertiary")
-# Philippine OSM convention tags tolled expressways highway=motorway. They are
-# reachable only through their ramps, so the opt-in adds both classes.
+# Reproducible historical four-class reference profile.
+MAJOR_ROAD_CLASSES = ("trunk", "primary", "secondary", "tertiary")
+# National default: ordinary motor-vehicle streets, expressways and access roads.
+# Five *_link classes are necessary to enter/exit expressways and other roads.
+COMPREHENSIVE_ROAD_CLASSES = (
+    "trunk", "primary", "secondary", "tertiary", "unclassified",
+    "residential", "motorway", "service", "living_street",
+    "trunk_link", "primary_link", "secondary_link", "tertiary_link", "motorway_link",
+)
+ROAD_CLASSES = COMPREHENSIVE_ROAD_CLASSES
+ROAD_PROFILES = {"major": MAJOR_ROAD_CLASSES, "comprehensive": COMPREHENSIVE_ROAD_CLASSES}
+
+# No inferred connections: this filter only rejects roads whose explicitly tagged
+# vehicle access prohibits ordinary public motor traffic. A more detailed routing
+# cost model must eventually handle destination, delivery, oneway and turns.
+DENIED_PUBLIC_VEHICLE_ACCESS = frozenset({"no", "private", "agricultural", "forestry", "delivery"})
+
+
+def public_motorcar_access(tags: dict) -> bool:
+    """Honor the most specific recorded motorcar access permission first."""
+    for key in ("motorcar", "motor_vehicle", "vehicle", "access"):
+        value = tags.get(key)
+        if value is not None:
+            return str(value).strip().lower() not in DENIED_PUBLIC_VEHICLE_ACCESS
+    return True
+
+
+def resolved_road_classes(profile: str, include_links=False, include_motorways=False) -> set[str]:
+    """Exact selected classes; legacy switches extend the major reference profile."""
+    if profile not in ROAD_PROFILES:
+        raise ValueError(f"Unknown road profile {profile!r}. Expected one of {tuple(ROAD_PROFILES)}")
+    classes = set(ROAD_PROFILES[profile])
+    if include_links:
+        classes.update(f"{name}_link" for name in MAJOR_ROAD_CLASSES)
+    if include_motorways:
+        classes.update(MOTORWAY_CLASSES)
+    return classes
+# Philippine OSM expressways use highway=motorway; motorway and motorway_link
+# are included in comprehensive, but optional for the historical major profile.
 MOTORWAY_CLASSES = ("motorway", "motorway_link")
 # Roles that mark the route line itself in a type=route relation. Other roles
 # (platform, stop, ...) mark terminals and stopping places, not the crossing.
@@ -72,7 +108,7 @@ def way_kind(tags: dict, osm_id: int, ferry_members: set[int], road_classes: set
     if tags.get("route") == "ferry":
         return "ferries", "ferry"
     highway = tags.get("highway", "")
-    if highway in road_classes:
+    if highway in road_classes and public_motorcar_access(tags):
         return "roads", highway
     if (osm_id in ferry_members and not highway and not closed
             and tags.get("area") != "yes" and not (FACILITY_KEYS & tags.keys())):
@@ -338,11 +374,9 @@ def build(args):
     source_hash = sha256_file(source)
     if args.expected_sha256 and source_hash != args.expected_sha256.lower():
         raise ValueError(f"OSM SHA-256 mismatch: got {source_hash}; expected {args.expected_sha256}")
-    classes = set(ROAD_CLASSES)
-    if args.include_links:
-        classes.update(f"{name}_link" for name in ROAD_CLASSES)
-    if getattr(args, "include_motorways", False):
-        classes.update(MOTORWAY_CLASSES)
+    profile = getattr(args, "road_profile", "comprehensive")
+    classes = resolved_road_classes(profile, include_links=args.include_links,
+                                     include_motorways=getattr(args, "include_motorways", False))
     releases = output / "transport_releases"
     releases.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".staging-", dir=releases) as temp:
@@ -352,7 +386,8 @@ def build(args):
             "schema": 1, "source_kind": "OpenStreetMap PBF" if source.suffix.lower() == ".pbf" else "OpenStreetMap XML",
             "source": str(source), "source_sha256": source_hash, "source_acquisition": origin,
             "created_utc": datetime.now(timezone.utc).isoformat(),
-            "road_filter": sorted(classes), "ferry_filter": FERRY_FILTER,
+            "road_profile": profile, "road_filter": sorted(classes), "ferry_filter": FERRY_FILTER,
+            "access_rule": "reject explicit no/private/agricultural/forestry/delivery for most specific motorcar/vehicle/access tag",
             "extraction_counts": counts, "crs": "EPSG:4326", "distance_measure": "geometry lengths; not travel time",
             "license_notice": "OpenStreetMap contributors (ODbL); comply with OSM attribution and database terms",
         }
@@ -392,10 +427,12 @@ def arguments(argv=None):
     p.add_argument("--source-url", default=GEOFABRIK_URL, help="HTTPS URL for --download")
     p.add_argument("--expected-sha256", help="Optional expected upstream OSM SHA-256 (recommended for exact replication)")
     p.add_argument("--output", type=Path, default=Path("data"), help="Output data root (not a source repository)")
-    p.add_argument("--include-links", action="store_true", help="Add trunk/primary/secondary/tertiary _link roads")
+    p.add_argument("--road-profile", choices=tuple(ROAD_PROFILES), default="comprehensive",
+                   help="Road selection: comprehensive (14 classes, default) or major (historical four classes)")
+    p.add_argument("--include-links", action="store_true", help="Legacy: add four major *_link classes to selected profile")
     p.add_argument("--include-motorways", action="store_true",
                    help="Add highway=motorway and motorway_link (tolled expressways in Philippine OSM); "
-                        "off by default to match the historical four-class network")
+                        "already included in comprehensive; opt-in for major")
     p.add_argument("--allow-no-ferries", action="store_true", help="Allow a terrestrial-only test extract")
     p.add_argument("--replace", action="store_true", help="Select a new release without deleting older ones")
     return p.parse_args(argv)

@@ -233,3 +233,19 @@ The changes below describe corrections exercised by synthetic regression tests; 
 - Added read-only `net-distance-ph diagnose-connectivity` to locate candidate road-vertex gaps for disconnected components, with CSV/GeoJSON reports and saved-input provenance verification.
 
 - Added read-only `inspect-osm-gaps` to examine original OSM way IDs, road classifications, access tags, and bounded shared-node routes near disconnected component vertices.
+
+## Road coverage default update — 2026-11-17
+
+- The default road extraction profile is now `comprehensive`: trunk, primary,
+  secondary, tertiary, unclassified, residential, motorway, service,
+  living_street, plus trunk/primary/secondary/tertiary/motorway `_link` ways.
+- An explicit `major` profile retains the historic four-class filter.
+- Explicitly private/prohibited motor-vehicle road access is excluded, but
+  conditional permissions, direction and turns are not yet route constraints.
+- Existing provenance-backed old-class transport releases migrate using the
+  cached PBF with a required matching original SHA-256, after archiving the
+  prior graph and connectivity audit. Releases remain immutable.
+- Way class is retained in transport shapefile `OSM_CLASS` for later
+  class-dependent routing-cost calibration; graph weights remain geodesic.
+- Nationwide results must be rerun; synthetic tests do not establish
+  complete/physically feasible Philippine connectivity.

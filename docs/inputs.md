@@ -21,12 +21,14 @@ accept precisely named, unambiguous shapefiles in the input folder.
 
 ### Roads
 
-The earlier implementation expected a `primsectertrunk_road` layer from an
-OpenStreetMap-based Geofabrik shapefile export. This is **not the whole road
-network**: its filename implies primary, secondary, tertiary and trunk roads
-and the actual subset should be checked against its extract specification.
-It therefore measures accessibility on the selected road classes, not on
-every possible street or path.
+The original `primsectertrunk_road.shp` filename remains for compatibility,
+but it **no longer identifies the selected highway classes**. The default
+`comprehensive` OSM extraction now includes 14 motor-road classes, including
+NLEX/SLEX motorway ramps, residential and public service roads. The previous
+four-class selection is available as `--road-profile major`. Read the exact
+`road_filter` in `current_transport.json`'s selected release provenance and
+consult [road profiles](road_profiles.md). The graph does not yet enforce
+one-way or turn restrictions or all conditional road-access permissions.
 
 ### Ferries
 

@@ -21,6 +21,16 @@ python -m pip install -e ".[test,geo,transport]"
 net-distance-ph --help
 ```
 
+## Road selection default
+
+The default `--road-profile comprehensive` now extracts fourteen motor-road
+classes (including motorways, motorway ramps, residential and service roads).
+`--road-profile major` selects the historical four classes (though newly applied access filtering may change individual included ways). For a
+versioned previous transport release, the next `prepare` stage verifies the
+cached PBF SHA-256, archives the old stage-1 graph/audit if present, and creates
+a new immutable transport release. It does **not** download a replacement PBF.
+See [road profiles](road_profiles.md) for the exact list and limitations.
+
 ## First national connectivity experiment
 
 ```powershell

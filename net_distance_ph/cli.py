@@ -39,6 +39,9 @@ def _add_shared(parser: argparse.ArgumentParser, *, stage: str | None = None) ->
         parser.add_argument("--out", type=Path, metavar="PATH", help="output folder")
         parser.add_argument("--verbose", action="store_true", help="print selected source and configuration details")
         parser.add_argument("--heartbeat-seconds", type=float, metavar="SECONDS", help="liveness message interval")
+    if stage in {"prepare", "graph", "run"}:
+        parser.add_argument("--road-profile", choices=("comprehensive", "major"),
+                            default="comprehensive", help="road filter: comprehensive default (14 classes), or historical major (4 classes)")
     if stage in {"graph", "run"}:
         parser.add_argument("--no-auto-prepare", action="store_true", help="do not download or rebuild missing graph inputs")
     if stage in {"matrix", "run"}:
@@ -173,6 +176,8 @@ def _invoke_stage(stage: str, args: argparse.Namespace) -> int:
         level = getattr(args, "boundary_level", "town")
         env = dict(os.environ)
         env["NET_DISTANCE_PH_BOUNDARY_LEVEL"] = level
+        if stage in {"prepare", "graph"}:
+            env["NET_DISTANCE_PH_ROAD_PROFILE"] = getattr(args, "road_profile", "comprehensive")
         return subprocess.run(command, check=False, env=env).returncode
     except FileNotFoundError as exc:
         print(f"ERROR: Cannot launch Python: {exc}", file=sys.stderr)

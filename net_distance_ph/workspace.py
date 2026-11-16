@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from datetime import datetime
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 import sys
 import threading
@@ -201,12 +203,95 @@ def _build_boundaries(root):
                            "existing boundary releases were not replaced")
 
 
-def _build_transport(root):
-    from scripts.build_transport import main
-    status = main(["--download", "--output", str(root)])
+def _selected_transport_profile(root):
+    """Inspect published class list (never infer it from a release filename).
+
+    Returns None for a historical source without an auditable manifest; such
+    custom/legacy imports are not silently migrated.
+    """
+    pointer = Path(root) / "current_transport.json"
+    if not pointer.is_file():
+        return None
+    record = json.loads(pointer.read_text(encoding="utf-8"))
+    rel = record.get("provenance")
+    if not rel:
+        return None
+    relpath = Path(rel)
+    if relpath.is_absolute() or ".." in relpath.parts:
+        raise RuntimeError(f"Unsafe transport provenance path: {relpath}")
+    manifest_path = (Path(root) / relpath).resolve()
+    manifest_path.relative_to(Path(root).resolve())
+    if not manifest_path.is_file():
+        raise RuntimeError(f"Selected transport release has missing provenance: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    classes = manifest.get("road_filter")
+    if not isinstance(classes, list) or not all(isinstance(c, str) for c in classes):
+        raise RuntimeError(f"Selected transport release has no auditable road_filter: {manifest_path}")
+    return set(classes), record
+
+
+def _archive_baseline_before_replacement(root, selection):
+    """Save a copy of previous stage-1 graph + audit before switching inputs.
+
+    The old immutable transport release is not changed. A completed baseline
+    directory is never overwritten on a subsequent attempt.
+    """
+    root = Path(root)
+    workspace = root.parent
+    release_id = selection.get("release_id")
+    if not isinstance(release_id, str) or not release_id or "/" in release_id or "\\" in release_id or release_id in {".", ".."}:
+        raise RuntimeError("Selected transport release has no safe release ID")
+    base = workspace / "baselines"
+    dest = base / f"transport-{release_id}"
+    if dest.exists():
+        print(f"REUSE: previous transport baseline archive {dest}")
+        return dest
+    base.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".baseline-", dir=base) as temp:
+        stage = Path(temp) / "payload"
+        stage.mkdir()
+        (stage / "current_transport.json").write_text(json.dumps(selection, indent=2) + "\n", encoding="utf-8")
+        for rel in ("work/graph_full.npz", "work/sources.npz"):
+            src = workspace / rel
+            if src.is_file():
+                target = stage / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, target)
+        report_dir = workspace / "output" / "connectivity_audit"
+        if report_dir.is_dir():
+            shutil.copytree(report_dir, stage / "output" / "connectivity_audit")
+        # Baseline snapshots are historical artifacts, not validated graph releases.
+        (stage / "README.txt").write_text(
+            "Prior selected transport pointer and any existing graph/audit snapshots.\n"
+            "Saved graph provenance must be independently checked before reuse.\n",
+            encoding="utf-8")
+        os.replace(stage, dest)
+    print(f"ARCHIVED: previous transport pointer, graph and audit at {dest}")
+    return dest
+
+
+def _build_transport(root, *, replace=False, selected=None):
+    """Prepare exact desired default using existing national PBF when replacing."""
+    from scripts.build_transport import main, ROAD_PROFILES
+    profile = os.environ.get("NET_DISTANCE_PH_ROAD_PROFILE", "comprehensive")
+    if profile not in ROAD_PROFILES:
+        raise ValueError(f"Unknown road profile: {profile}")
+    args = ["--output", str(root), "--road-profile", profile]
+    if replace:
+        # Never fetch a different OSM snapshot while migrating the selected
+        # release: exact file bytes must match the old recorded source hash.
+        if selected is None or not selected.get("source_sha256"):
+            raise RuntimeError("Cannot replace selected transport without recorded OSM source SHA-256")
+        local_pbf = Path(root) / "sources" / "philippines-latest.osm.pbf"
+        if not local_pbf.is_file():
+            raise FileNotFoundError(f"Cached OSM PBF missing: {local_pbf}; refusing replacement/download")
+        args += ["--pbf", str(local_pbf), "--expected-sha256", selected["source_sha256"], "--replace"]
+    else:
+        args += ["--download"]
+    status = main(args)
     if status != 0:
-        raise RuntimeError(f"Transport source preparation failed (exit {status}). "
-                           "Check the source download and extraction messages above.")
+        raise RuntimeError(f"Transport source preparation failed (exit {status}); "
+                           "the selected transport release was not intentionally changed")
 
 
 def prepare_sources(root, *, heartbeat_seconds=30):
@@ -230,5 +315,24 @@ def prepare_sources(root, *, heartbeat_seconds=30):
             "roads": "primsectertrunk_road.shp", "ferries": "ferry_route_shape.shp"}):
             raise RuntimeError("Transport builder returned without publishing required network inputs")
     else:
-        print("REUSE: validated existing transport inputs (no download)")
+        checked = _selected_transport_profile(root)
+        if checked is None:
+            print("REUSE: selected legacy transport has no class manifest; retaining user-supplied input")
+        else:
+            classes, record = checked
+            from scripts.build_transport import ROAD_PROFILES
+            profile = os.environ.get("NET_DISTANCE_PH_ROAD_PROFILE", "comprehensive")
+            if profile not in ROAD_PROFILES:
+                raise ValueError(f"Unknown road profile: {profile}")
+            expected = set(ROAD_PROFILES[profile])
+            if classes != expected:
+                print(f"ROAD PROFILE CHANGE: recorded={sorted(classes)}; requested={sorted(expected)}")
+                with timed_step("Re-extract requested road profile from cached OSM snapshot", heartbeat_seconds):
+                    _archive_baseline_before_replacement(root, record)
+                    _build_transport(root, replace=True, selected=record)
+                updated = _selected_transport_profile(root)
+                if updated is None or updated[0] != expected:
+                    raise RuntimeError("Transport rebuild returned without publishing the requested road class profile")
+            else:
+                print(f"REUSE: validated existing transport profile={profile} (no download/extraction)")
     print("READY: selected boundary and transport inputs pass file-presence checks")
