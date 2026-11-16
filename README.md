@@ -17,13 +17,16 @@ clear row/column identifiers, and numerical verification against the correspondi
 
 ## Quick start
 
+The installed CLI is **`net-distance-ph`** (see [CLI reference](docs/cli.md)). Run `net-distance-ph status` to inspect the workspace, `net-distance-ph doctor` for source preflight, and `net-distance-ph run --until connectivity` for the first national connectivity experiment.
+
+
 Python 3.11 or newer; run from the repository root:
 
 ```bash
 python -m pip install -e ".[test,geo,transport,docs]"
 python -m pytest -q
 # Automatically acquires missing PSA/geoBoundaries + OSM inputs into Documents
-python run.py all --workers 4 --verbose
+net-distance-ph run --until connectivity --verbose
 # Or prepare sources only (no matrix computation): python run.py prepare --verbose
 ```
 

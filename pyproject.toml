@@ -15,6 +15,7 @@ keywords = ["Philippines", "distance matrix", "routing", "OSM", "ferries", "PSGC
 classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: GIS"]
 
 [project.scripts]
+net-distance-ph = "net_distance_ph.cli:main"
 net-distance-ph-connectivity = "net_distance_ph.connectivity:main"
 
 [project.optional-dependencies]
@@ -23,8 +24,14 @@ transport = ["osmium>=4.0", "pyshp>=2.3,<3", "requests>=2.31"]
 test = ["pytest>=8", "pyproj>=3.5", "pyshp>=2.3,<3"]
 docs = ["mkdocs-material>=9.5"]
 
+[tool.setuptools]
+py-modules = ["run", "config", "check_setup", "check_reduce_status"]
+
 [tool.setuptools.packages.find]
-include = ["net_distance_ph*"]
+include = ["net_distance_ph*", "scripts*", "reference*"]
+
+[tool.setuptools.package-data]
+"reference.psgc" = ["*.json", "*.jsonl.gz", "*.xlsx", "README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

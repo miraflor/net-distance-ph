@@ -1,5 +1,13 @@
 # Changelog
 
+## Unified installed command-line interface — 2026-11-16
+
+- Registered `net-distance-ph` with individual stage subcommands, `status`, `doctor`, and controlled `run --from/--until/--only/--all` ranges.
+- Stage orchestration delegates to the existing provenance-aware `run` engine, retaining `python run.py` compatibility and existing routing algorithms.
+- Packaged root runner modules, source builders, and pinned PSGC reference data for commands invoked outside the repository folder.
+- No nationwide geographic computation or new distance result is claimed.
+
+
 ## Unreleased — explicit connectivity audit CLI
 
 - Added `python run.py connectivity` and `net-distance-ph-connectivity`.
