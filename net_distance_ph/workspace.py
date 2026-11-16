@@ -143,6 +143,18 @@ def _selected(root, pointer_name, filename_by_key):
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Selected source {pointer} is invalid: {exc}. "
                                "Refusing to overwrite it automatically.") from exc
+        configured_level = os.environ.get("NET_DISTANCE_PH_BOUNDARY_LEVEL")
+        if configured_level and record.get("boundary_level", "town") != configured_level:
+            raise RuntimeError(f"Selected boundary level {record.get('boundary_level', 'town')} "
+                               f"differs from requested {configured_level}; use a separate workspace")
+        if record.get("boundary_level", "town") != "town":
+            roster_rel = Path(record.get("roster", ""))
+            if (not record.get("roster") or roster_rel.is_absolute() or ".." in roster_rel.parts
+                    or not (root / roster_rel).is_file()):
+                raise RuntimeError(f"Selected {record['boundary_level']} boundary roster missing or unsafe in {pointer}")
+            from .boundaries import sha256
+            if record.get("roster_sha256") != sha256(root / roster_rel):
+                raise RuntimeError(f"Selected {record['boundary_level']} roster checksum differs from pointer: {pointer}")
         return True
 
     # The old CLI accepted manually prepared shapefiles under one data root.
@@ -175,12 +187,18 @@ def _selected(root, pointer_name, filename_by_key):
 
 
 def _build_boundaries(root):
-    from scripts.build_boundaries import main
-    status = main(["--output", str(root)])
+    """Automatically validate and publish the pinned PSGC-aligned source.
+
+    Replaces the old default geoBoundaries reconciliation, but never modifies
+    an existing selection pointer or continues after a validation error.
+    """
+    from net_distance_ph.boundaries import run as import_boundaries
+    level = os.environ.get("NET_DISTANCE_PH_BOUNDARY_LEVEL", "town")
+    status = import_boundaries(workspace=Path(root).parent, download=True,
+                               publish=True, level=level)
     if status != 0:
-        raise RuntimeError(f"Boundary source preparation failed (exit {status}). "
-                           f"Review {root / 'boundary_build_incomplete' / 'boundary_match_audit.csv'}; "
-                           "PSA/geoBoundaries vintages may require reviewed overrides.")
+        raise RuntimeError(f"PSGC-aligned {level} boundary preparation failed (exit {status}); "
+                           "existing boundary releases were not replaced")
 
 
 def _build_transport(root):
@@ -199,7 +217,7 @@ def prepare_sources(root, *, heartbeat_seconds=30):
     transport_ok = _selected(root, "current_transport.json", {
         "roads": "primsectertrunk_road.shp", "ferries": "ferry_route_shape.shp"})
     if not boundaries_ok:
-        with timed_step("Acquire PSA + geoBoundaries; reconcile municipalities and generate centroids", heartbeat_seconds):
+        with timed_step("Validate pinned PSGC-aligned boundaries and generate selected origins", heartbeat_seconds):
             _build_boundaries(root)
         if not _selected(root, "current_boundaries.json", {"centroids": "muncity_centroids.shp"}):
             raise RuntimeError("Boundary builder returned without publishing required centroid inputs")

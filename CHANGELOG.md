@@ -1,5 +1,10 @@
 # Changelog
 
+- **CLI / source preparation:** Automatically select checksum-pinned PSGC-aligned
+  town boundaries; add `--boundary-level` for town, barangay, city, municipality,
+  HUC, province and region with isolated non-town workspaces and level-specific
+  connectivity rosters. No nationwide test result is asserted.
+
 ## PSGC-aligned boundary-source validation CLI — 2026-11-16
 
 - Added `net-distance-ph boundaries --source ZIP` / `--download` for a pinned, SHA-256-verified ADM3 alternative aligned to 1,642 official localities (Manila collapsed to one city).

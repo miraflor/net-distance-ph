@@ -1,6 +1,12 @@
 # PSGC-aligned municipal boundaries (optional source)
 
-The default `prepare` stage uses older geoBoundaries ADM3 polygons and can fail to reconcile the PSA Q2 2026 municipality/city roster. This is expected when geographic vintages differ; **do not waive incomplete matches**.
+**Update:** The ordinary `prepare` / `run --until connectivity` pipeline now
+automatically downloads, validates and publishes this pinned source when a
+selected boundary release does not exist. Manual `boundaries --download` and
+`boundaries --publish` are still supported as inspection/explicit selection tools.
+For finer or coarser administrative levels see [Boundary levels](boundary_levels.md).
+
+The former `prepare` stage used older geoBoundaries ADM3 polygons and could fail to reconcile the PSA Q2 2026 municipality/city roster. This is expected when geographic vintages differ; **do not waive incomplete matches**.
 
 An alternative source is [Philippines PSGC Shapefiles v1.0.1](https://github.com/faeldon/philippines-psgc-shapefiles/releases/tag/v1.0.1), whose ADM3 release is aligned to PSGC Q3 2026. Its published ADM3 attribute CSV matches all 1,642 codes, names, and city/municipality types in this repository's pinned PSGC Q2 2026 roster (verified in November 2026). Crucially, **Manila is one city** (`1380600000`); the 14 sub-municipal districts are *not separate routing origins*. Eight BARMM Special Geographic Area municipalities are included.
 

@@ -111,9 +111,16 @@ def audit(roster, ids, names, node_idx, tier, offset, coords, u, v, code, flags)
     official_snapped = [key for key in official_codes if key in source and snap[source[key]]]
     full_counter = Counter(int(full_label[node_idx[source[key]]]) for key in official_snapped)
     road_counter = Counter(int(road_label[node_idx[source[key]]]) for key in official_snapped)
-    ordered_full = sorted(full_counter, key=lambda c: (-full_counter[c], min(k for k in official_snapped if int(full_label[node_idx[source[k]]]) == c)))
+    full_reps = {}
+    road_reps = {}
+    for k in official_snapped:
+        c = int(full_label[node_idx[source[k]]])
+        rc = int(road_label[node_idx[source[k]]])
+        full_reps[c] = min(full_reps.get(c, k), k)
+        road_reps[rc] = min(road_reps.get(rc, k), k)
+    ordered_full = sorted(full_counter, key=lambda c: (-full_counter[c], full_reps[c]))
     full_ids = {c: f"C{i:04d}" for i, c in enumerate(ordered_full, 1)}
-    ordered_road = sorted(road_counter, key=lambda c: (-road_counter[c], min(k for k in official_snapped if int(road_label[node_idx[source[k]]]) == c)))
+    ordered_road = sorted(road_counter, key=lambda c: (-road_counter[c], road_reps[c]))
     road_ids = {c: f"R{i:04d}" for i, c in enumerate(ordered_road, 1)}
 
     connected_full = sum(choose2(v) for v in full_counter.values())
@@ -176,9 +183,17 @@ def audit(roster, ids, names, node_idx, tier, offset, coords, u, v, code, flags)
                                sample_towns="; ".join(f"{r['name']} ({r['psgc_code']})" for r in example)))
 
     reps = {c: sorted(members[c], key=lambda r: str(r["psgc_code"]))[0] for c in ordered_full}
-    # Keep memory bounded even if every one of the 1,642 towns is isolated.
-    top_barrier_pairs = heapq.nlargest(100, combinations(ordered_full, 2),
-                                      key=lambda ab: full_counter[ab[0]] * full_counter[ab[1]])
+    # Exact 100 heaviest component pairs in O(C log C), not O(C^2).
+    # Essential when auditing up to 42,010 barangay origins.
+    frontier = [(-full_counter[ordered_full[i]] * full_counter[ordered_full[i + 1]], i, i + 1)
+                for i in range(len(ordered_full) - 1)]
+    heapq.heapify(frontier)
+    top_barrier_pairs = []
+    while frontier and len(top_barrier_pairs) < 100:
+        _, i, j = heapq.heappop(frontier)
+        top_barrier_pairs.append((ordered_full[i], ordered_full[j]))
+        if j + 1 < len(ordered_full):
+            heapq.heappush(frontier, (-full_counter[ordered_full[i]] * full_counter[ordered_full[j+1]], i, j+1))
     barriers = [dict(component_a=full_ids[a], component_b=full_ids[b],
                      town_a=f"{reps[a]['name']} ({reps[a]['psgc_code']})",
                      town_b=f"{reps[b]['name']} ({reps[b]['psgc_code']})",
@@ -270,6 +285,27 @@ def execute(args, *, work_override=None, output_override=None, verified_from_cal
     work = Path(work_override).expanduser().resolve() if work_override is not None else args.workspace.expanduser().resolve() / "work"
     out = Path(output_override).expanduser().resolve() if output_override is not None else args.workspace.expanduser().resolve() / "output" / "connectivity_audit"
     roster_path = repo / "reference" / "psgc" / "psgc_q2_2026_localities.json"
+    boundary_level = "town"
+    selected_path = args.workspace.expanduser().resolve() / "data" / "current_boundaries.json"
+    if selected_path.is_file():
+        selected = json.loads(selected_path.read_text(encoding="utf-8"))
+        boundary_level = selected.get("boundary_level", "town")
+        if boundary_level != "town":
+            from net_distance_ph.boundary_levels import LEVELS
+            if boundary_level not in LEVELS:
+                raise ValueError(f"Unknown selected boundary level: {boundary_level}")
+            relative = Path(selected.get("roster", ""))
+            if not selected.get("roster") or relative.is_absolute() or ".." in relative.parts:
+                raise ValueError("Unsafe or missing selected level-roster path")
+            roster_path = (selected_path.parent / relative).resolve()
+            roster_path.relative_to(selected_path.parent.resolve())
+            from net_distance_ph.boundaries import sha256
+            if selected.get("roster_sha256") != sha256(roster_path):
+                raise ValueError("Selected level roster checksum differs from boundary pointer")
+    if boundary_level == "town" and not roster_path.is_file():
+        # Installed wheel: pinned PSA reference is a separately packaged module.
+        from reference import psgc as pinned_psgc
+        roster_path = Path(pinned_psgc.__file__).resolve().parent / "psgc_q2_2026_localities.json"
     graph_path = work / "graph_full.npz"
     sources_path = work / "sources.npz"
     if not roster_path.is_file():
@@ -298,11 +334,19 @@ def execute(args, *, work_override=None, output_override=None, verified_from_cal
             return 2
     with roster_path.open("r", encoding="utf-8") as f:
         roster_file = json.load(f)
-    if roster_file.get("schema") != "net-distance-ph/psgc-localities/v1":
-        raise ValueError("Unexpected reference/psgc roster schema")
+    if boundary_level == "town":
+        if roster_file.get("schema") != "net-distance-ph/psgc-localities/v1":
+            raise ValueError("Unexpected reference/psgc roster schema")
+        expected_count = 1642
+    else:
+        from net_distance_ph.boundary_levels import COUNT
+        if (roster_file.get("schema") != "net-distance-ph/psgc-selected-level/v1"
+                or roster_file.get("boundary_level") != boundary_level):
+            raise ValueError("Selected level-roster schema/level differs from boundary pointer")
+        expected_count = COUNT[boundary_level]
     roster = roster_file.get("localities")
-    if not isinstance(roster, list) or len(roster) != 1642:
-        raise ValueError("Reference roster is not the expected 1,642 Q2 2026 localities")
+    if not isinstance(roster, list) or len(roster) != expected_count:
+        raise ValueError(f"Selected roster must contain exactly {expected_count} {boundary_level} units")
     with np.load(sources_path, allow_pickle=False) as s:
         ids, names = s["ids"], s["names"]
         node_idx, tier = s["node_idx"], s["tier"]
@@ -319,6 +363,7 @@ def execute(args, *, work_override=None, output_override=None, verified_from_cal
     report.update({
         "date_utc": datetime.now(timezone.utc).isoformat(),
         "repository": str(repo), "workspace": str(args.workspace.expanduser().resolve()),
+        "boundary_level": boundary_level, "selected_roster": str(roster_path),
         "source_data_root": recorded_data_root,
         "source_fingerprint": manifest.get("fingerprint"),
         "provenance_checked": verified_from_caller or not args.skip_provenance,

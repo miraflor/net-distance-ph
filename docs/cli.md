@@ -1,5 +1,12 @@
 # Unified command-line interface
 
+**Default behavior:** `net-distance-ph run --until connectivity --verbose` now
+validates and publishes the checksum-pinned PSGC-aligned town source automatically.
+Use `--boundary-level {town,city,municipality,huc,province,region,barangay}`
+(default `town`) to select geographic origins. Non-town levels use separate
+`workspace/levels/<level>` folders so their graph and matrix artifacts cannot mix.
+See [boundary levels](boundary_levels.md) for source and approximation cautions.
+
 **Alternative 2026 PSGC-aligned geometry:** `net-distance-ph boundaries --download` validates the pinned third-party ADM3 ZIP; append `--publish` only after reviewing provenance. See [the boundary-source instructions](psgc_aligned_boundaries.md).
 
 `net-distance-ph` is the installed command for source preparation, nationwide graph

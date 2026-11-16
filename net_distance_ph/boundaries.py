@@ -51,19 +51,19 @@ def code10(value: object) -> str:
     return s.zfill(10)
 
 
-def _download(cache: Path) -> Path:
+def _download(cache: Path, *, url: str = DOWNLOAD_URL, expected_sha: str = ARCHIVE_SHA256) -> Path:
     """Download only the exact pinned archive, atomically; never trust an unverified cache."""
     cache.parent.mkdir(parents=True, exist_ok=True)
     if cache.exists():
-        if sha256(cache) != ARCHIVE_SHA256:
+        if sha256(cache) != expected_sha:
             raise ValueError(f"Cached ZIP checksum differs from pinned release: {cache}. Remove the bad file manually.")
         print(f"REUSE: checksum-verified archive {cache}", flush=True)
         return cache
     tmp = cache.with_name(cache.name + ".part")
     if tmp.exists():
         raise FileExistsError(f"Partial download already exists: {tmp}. Remove it to retry.")
-    print(f"DOWNLOADING: {DOWNLOAD_URL}\nDestination: {cache}", flush=True)
-    req = Request(DOWNLOAD_URL, headers={"User-Agent": "net-distance-ph/0.1 (research boundary provenance)"})
+    print(f"DOWNLOADING: {url}\nDestination: {cache}", flush=True)
+    req = Request(url, headers={"User-Agent": "net-distance-ph/0.1 (research boundary provenance)"})
     try:
         with urlopen(req, timeout=90) as source, tmp.open("xb") as dest:
             count = 0
@@ -72,7 +72,7 @@ def _download(cache: Path) -> Path:
                 count += len(chunk)
                 if count // (32 * 1024 * 1024) != (count - len(chunk)) // (32 * 1024 * 1024):
                     print(f"  downloaded {count / (1024 * 1024):.1f} MiB", flush=True)
-        if sha256(tmp) != ARCHIVE_SHA256:
+        if sha256(tmp) != expected_sha:
             raise ValueError("Downloaded archive checksum is incorrect; refusing to use it")
         os.replace(tmp, cache)
     except BaseException:
@@ -235,8 +235,12 @@ def _write_review(frame, report: dict, output: Path) -> Path:
 
 
 def run(*, workspace: Path, source: Path | None = None, download: bool = False,
-        publish: bool = False, replace: bool = False) -> int:
-    """Run from the installed CLI; keep source acquisition and publication explicit."""
+        publish: bool = False, replace: bool = False, level: str = "town") -> int:
+    """Run source validation and optionally publish the selected geographic level."""
+    if level != "town":
+        from .boundary_levels import run as run_level
+        return run_level(workspace=workspace, level=level, source=source,
+                         download=download, publish=publish, replace=replace)
     from scripts.build_boundaries import BUNDLED_PSGC_JSON, main as build_boundaries
 
     root = Path(workspace).expanduser().resolve()

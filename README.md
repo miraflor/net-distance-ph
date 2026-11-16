@@ -19,6 +19,18 @@ clear row/column identifiers, and numerical verification against the correspondi
 
 ## Quick start
 
+The installed pipeline now **automatically validates and selects** pinned PSGC-aligned
+municipal boundaries on the first run; no separate `boundaries --publish` command is required:
+
+```powershell
+net-distance-ph run --until connectivity --verbose
+# Optional levels (isolated workspaces):
+net-distance-ph run --until connectivity --boundary-level city --verbose
+net-distance-ph run --until connectivity --boundary-level province --verbose
+```
+
+See [Boundary levels and source limitations](docs/boundary_levels.md).
+
 The installed CLI is **`net-distance-ph`** (see [CLI reference](docs/cli.md)). Run `net-distance-ph status` to inspect the workspace, `net-distance-ph doctor` for source preflight, and `net-distance-ph run --until connectivity` for the first national connectivity experiment.
 
 

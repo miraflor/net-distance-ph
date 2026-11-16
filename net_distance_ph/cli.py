@@ -11,6 +11,7 @@ import argparse
 import importlib.metadata
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -19,11 +20,15 @@ from .workspace import paths, workspace_path
 
 STAGES = ("prepare", "graph", "connectivity", "reduce", "matrix", "verify")
 DIRECT_STAGES = STAGES
+from .boundary_levels import LEVELS
+
 DATA_DEPENDENCIES = ("numpy", "scipy", "pandas", "geopandas", "pyproj", "osmium", "shapefile")
 
 
 def _add_shared(parser: argparse.ArgumentParser, *, stage: str | None = None) -> None:
     parser.add_argument("--workspace", type=Path, metavar="PATH", help="workspace root (default: ~/Documents/net-distance-ph)")
+    parser.add_argument("--boundary-level", choices=LEVELS, default="town",
+                        help="geographic origins: town (default), city, municipality, huc, province, region, barangay")
     if stage == "status":
         parser.add_argument("--data", type=Path, metavar="PATH", help="input root to inspect")
         parser.add_argument("--work", type=Path, metavar="PATH", help="graph folder to inspect")
@@ -69,6 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("boundaries", help="validate or publish pinned PSGC-aligned ADM3 polygons", description="Validate a pinned third-party municipality/city polygon source; explicit --publish required")
     p.add_argument("--workspace", type=Path, metavar="PATH", help="workspace root")
+    p.add_argument("--boundary-level", "--level", choices=LEVELS, default="town",
+                   help="select PSGC polygon level (default: town)")
     boundary_source = p.add_mutually_exclusive_group(required=True)
     boundary_source.add_argument("--source", type=Path, metavar="ZIP", help="local v1.0.1 ADM3 shapefile ZIP")
     boundary_source.add_argument("--download", action="store_true", help="download the pinned 160 MB ZIP into the workspace cache")
@@ -102,8 +109,19 @@ def _version() -> str:
         return "development checkout"
 
 
+def _effective_workspace(args: argparse.Namespace) -> Path:
+    root = workspace_path(args.workspace)
+    level = getattr(args, "boundary_level", "town")
+    return root if level == "town" else root / "levels" / level
+
+
 def _base_args(args: argparse.Namespace) -> list[str]:
-    workspace = workspace_path(args.workspace)
+    level = getattr(args, "boundary_level", "town")
+    if level != "town" and (any(getattr(args, x, None) is not None for x in ("data", "work", "out"))
+            or any(name in os.environ for name in ("NET_DISTANCE_PH_DATA", "NET_DISTANCE_PH_WORK", "NET_DISTANCE_PH_OUT"))):
+        raise ValueError("Use --workspace, not explicit --data/--work/--out or their environment "
+                         "variables, for non-town levels; this prevents mixing graph artifacts")
+    workspace = _effective_workspace(args)
     result = ["--workspace", str(workspace)]
     for name in ("data", "work", "out"):
         value = getattr(args, name, None)
@@ -141,7 +159,10 @@ def _invoke_stage(stage: str, args: argparse.Namespace) -> int:
     command = [sys.executable, "-m", "run", *_stage_args(stage, args)]
     print("\n>>> net-distance-ph: " + stage, flush=True)
     try:
-        return subprocess.run(command, check=False).returncode
+        level = getattr(args, "boundary_level", "town")
+        env = dict(os.environ)
+        env["NET_DISTANCE_PH_BOUNDARY_LEVEL"] = level
+        return subprocess.run(command, check=False, env=env).returncode
     except FileNotFoundError as exc:
         print(f"ERROR: Cannot launch Python: {exc}", file=sys.stderr)
         return 2
@@ -164,6 +185,8 @@ def _selection(args: argparse.Namespace) -> tuple[str, ...]:
 def _perform(args: argparse.Namespace) -> int:
     stages = _selection(args)
     print("Stage plan: " + " -> ".join(stages), flush=True)
+    if getattr(args, "boundary_level", "town") != "town":
+        print(f"Boundary level: {args.boundary_level}; isolated workspace: {_effective_workspace(args)}", flush=True)
     if "connectivity" in stages:
         print("Connectivity is a gate: disconnected or missing towns stop this run.", flush=True)
     for stage in stages:
@@ -178,7 +201,7 @@ def _perform(args: argparse.Namespace) -> int:
 
 
 def _paths_for(args: argparse.Namespace) -> dict[str, Path]:
-    result = paths(workspace_path(args.workspace))
+    result = paths(_effective_workspace(args))
     for flag, name in (("data", "data"), ("work", "work"), ("out", "output")):
         override = getattr(args, flag, None)
         if override is not None:
@@ -253,8 +276,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "boundaries":
             from .boundaries import run as run_boundaries
-            return run_boundaries(workspace=workspace_path(args.workspace), source=args.source,
-                                  download=args.download, publish=args.publish, replace=args.replace)
+            return run_boundaries(workspace=_effective_workspace(args), source=args.source,
+                                  download=args.download, publish=args.publish, replace=args.replace,
+                                  level=args.boundary_level)
         return _perform(args)
     except (ValueError, OSError, ImportError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
