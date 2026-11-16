@@ -1,5 +1,7 @@
 # Changelog
 
+- fix(boundaries): audit and conservatively repair invalid upstream geometries; reject material changes.
+
 - **CLI / source preparation:** Automatically select checksum-pinned PSGC-aligned
   town boundaries; add `--boundary-level` for town, barangay, city, municipality,
   HUC, province and region with isolated non-town workspaces and level-specific

@@ -1,5 +1,18 @@
 # PSGC-aligned municipal boundaries (optional source)
 
+## Conservative invalid polygon repair
+
+The upstream ZIP is never edited. If validation encounters an invalid polygon, the
+importer tries Shapely `make_valid` (structure and linework methods) and accepts
+only a polygonal result with at most 0.01% area change, at most 1 metre shift in
+bounds, and no more than 100 metres or 0.1% of the original bounding box
+diagonal shift in centroid (whichever is smaller, with a 1 m floor).
+Every accepted change is logged with the official/source identifier, GEOS
+invalidity explanation, repair method, before/after WKB hashes, area change,
+and centroid/bounds shifts in the derived boundary provenance.
+Repairs that exceed limits or collapse to non-polygons **still stop** the
+pipeline. Validity does not certify legal or historical accuracy.
+
 **Update:** The ordinary `prepare` / `run --until connectivity` pipeline now
 automatically downloads, validates and publishes this pinned source when a
 selected boundary release does not exist. Manual `boundaries --download` and

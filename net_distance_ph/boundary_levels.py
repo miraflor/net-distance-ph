@@ -103,9 +103,8 @@ def validate_level(source: Path, level: str, *, expected_sha: str | None = None)
         raise ValueError(f"{level} source includes empty geometries")
     if not level_rows.geometry.geom_type.isin(("Polygon", "MultiPolygon")).all():
         raise ValueError(f"{level} source contains nonpolygon geometries")
-    if not level_rows.geometry.is_valid.all():
-        bad = level_rows.index[~level_rows.geometry.is_valid].tolist()[:15]
-        raise ValueError(f"{level} source contains invalid geometries at {bad}")
+    from .geometry_repair import repair_polygons
+    level_rows, geometry_repairs = repair_polygons(level_rows, id_column=code_col, name_column=name_col)
     codes = level_rows[code_col].map(upstream.code10).tolist()
     duplicates = [code for code, count in Counter(codes).items() if count != 1]
     missing = sorted(official_by_code.keys() - set(codes))
@@ -138,6 +137,7 @@ def validate_level(source: Path, level: str, *, expected_sha: str | None = None)
         "official_workbook": str(workbook), "official_workbook_sha256": upstream.sha256(workbook),
         "source_name_differences": conflicts,
         "source_crs": str(level_rows.crs),
+        "geometry_repairs": geometry_repairs,
         "source_is_reconstructed": True,
         "interpretation": "PSGC IDs and polygon validity, not surveyed 2026 boundaries or physical transport reachability",
     }

@@ -136,9 +136,8 @@ def validate(source: Path, roster: Path, *, expected_sha: str = ARCHIVE_SHA256):
         raise ValueError("ADM3 contains missing or empty geometry")
     if not frame.geometry.geom_type.isin(("Polygon", "MultiPolygon")).all():
         raise ValueError("ADM3 contains nonpolygon geometry")
-    if not frame.geometry.is_valid.all():
-        bad = frame.index[~frame.geometry.is_valid].tolist()
-        raise ValueError(f"ADM3 contains invalid geometry at rows {bad[:12]}")
+    from .geometry_repair import repair_polygons
+    frame, geometry_repairs = repair_polygons(frame, id_column="adm3_psgc", name_column="adm3_en")
 
     codes = [code10(raw) for raw in frame["adm3_psgc"].tolist()]
     c = Counter(codes)
@@ -178,6 +177,7 @@ def validate(source: Path, roster: Path, *, expected_sha: str = ARCHIVE_SHA256):
         "official_roster_sha256": sha256(roster),
         "official_psgc_publication_date": data.get("source", {}).get("publication_date"),
         "source_crs": frame.crs.to_string(),
+        "geometry_repairs": geometry_repairs,
         "feature_count": len(frame),
         "distinct_psgc_codes": len(c),
         "manila_psgc": "1380600000",
