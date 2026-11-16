@@ -89,3 +89,7 @@ review long centroid snaps and ferry terminals, and run final verification.
 ## Inspect disconnected graph topology (read only)
 
 `net-distance-ph diagnose-connectivity --top 43` reads the existing stage-1 graph and reports candidate intercomponent road-vertex gaps without editing graph or sources. See [Connectivity diagnostics](connectivity_diagnostics.md).
+
+## Examine the cached OSM source at component gaps (read only)
+
+`net-distance-ph inspect-osm-gaps --top 9 --radius-m 1000` scans the cached OSM PBF and tests whether omitted road classes create local shared-node paths. No roads or graph edges are changed. See [OSM gap inspection](osm_gap_inspection.md).

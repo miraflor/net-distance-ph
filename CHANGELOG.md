@@ -231,3 +231,5 @@ The changes below describe corrections exercised by synthetic regression tests; 
 - No derived national road graph or precomputed national matrix is bundled.
 
 - Added read-only `net-distance-ph diagnose-connectivity` to locate candidate road-vertex gaps for disconnected components, with CSV/GeoJSON reports and saved-input provenance verification.
+
+- Added read-only `inspect-osm-gaps` to examine original OSM way IDs, road classifications, access tags, and bounded shared-node routes near disconnected component vertices.

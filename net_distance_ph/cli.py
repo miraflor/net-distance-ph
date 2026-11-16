@@ -87,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--boundary-level", choices=LEVELS, default="town", help="level of existing saved graph (default: town)")
     p.add_argument("--top", type=int, default=20, metavar="N", help="how many smallest gaps to print")
 
+    p = sub.add_parser("inspect-osm-gaps", help="read-only examination of cached OSM way/node topology at component gaps")
+    p.add_argument("--workspace", type=Path, metavar="PATH", help="workspace root")
+    p.add_argument("--boundary-level", choices=LEVELS, default="town", help="geographic level of saved graph (default: town)")
+    p.add_argument("--top", type=int, default=9, metavar="N", help="number of closest gap components to examine (default: 9)")
+    p.add_argument("--radius-m", type=float, default=1000.0, metavar="METRES", help="local path and way search radius per gap endpoint (default: 1000)")
+
     p = sub.add_parser("run", help="execute a controlled, stop-on-failure range of stages")
     _add_shared(p, stage="run")
     selectors = p.add_mutually_exclusive_group(required=True)
@@ -279,6 +285,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         return _doctor(args)
     try:
+        if args.command == "inspect-osm-gaps":
+            from .osm_gap_inspection import run as run_osm_inspection
+            return run_osm_inspection(workspace=_effective_workspace(args),
+                                      top=args.top, radius_m=args.radius_m)
         if args.command == "diagnose-connectivity":
             from .connectivity_diagnostics import run as run_diagnostics
             return run_diagnostics(workspace=_effective_workspace(args), top=args.top)
