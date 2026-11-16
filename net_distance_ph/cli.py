@@ -67,6 +67,14 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(stage, help=purpose, description=purpose)
         _add_shared(p, stage=stage)
 
+    p = sub.add_parser("boundaries", help="validate or publish pinned PSGC-aligned ADM3 polygons", description="Validate a pinned third-party municipality/city polygon source; explicit --publish required")
+    p.add_argument("--workspace", type=Path, metavar="PATH", help="workspace root")
+    boundary_source = p.add_mutually_exclusive_group(required=True)
+    boundary_source.add_argument("--source", type=Path, metavar="ZIP", help="local v1.0.1 ADM3 shapefile ZIP")
+    boundary_source.add_argument("--download", action="store_true", help="download the pinned 160 MB ZIP into the workspace cache")
+    p.add_argument("--publish", action="store_true", help="after validation, publish a complete boundary release")
+    p.add_argument("--replace", action="store_true", help="explicitly replace an existing selected boundary release (requires --publish)")
+
     p = sub.add_parser("run", help="execute a controlled, stop-on-failure range of stages")
     _add_shared(p, stage="run")
     selectors = p.add_mutually_exclusive_group(required=True)
@@ -243,8 +251,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         return _doctor(args)
     try:
+        if args.command == "boundaries":
+            from .boundaries import run as run_boundaries
+            return run_boundaries(workspace=workspace_path(args.workspace), source=args.source,
+                                  download=args.download, publish=args.publish, replace=args.replace)
         return _perform(args)
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, ImportError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 

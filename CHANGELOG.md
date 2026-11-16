@@ -1,5 +1,11 @@
 # Changelog
 
+## PSGC-aligned boundary-source validation CLI — 2026-11-16
+
+- Added `net-distance-ph boundaries --source ZIP` / `--download` for a pinned, SHA-256-verified ADM3 alternative aligned to 1,642 official localities (Manila collapsed to one city).
+- Added explicit `--publish` to invoke the existing atomic boundary builder after structural GIS validation; kept transport, routing, matrix algorithms and legacy preparation defaults unchanged.
+- Geometry is reconstructed third-party data and is not a certified legal 2026 boundary survey; no national connectivity result is claimed.
+
 ## Unified installed command-line interface — 2026-11-16
 
 - Registered `net-distance-ph` with individual stage subcommands, `status`, `doctor`, and controlled `run --from/--until/--only/--all` ranges.

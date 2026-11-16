@@ -12,6 +12,7 @@ nav:
   - Methodology: methodology.md
   - Running the pipeline: pipeline.md
   - Unified CLI: cli.md
+  - PSGC-aligned boundaries: psgc_aligned_boundaries.md
   - Connectivity preflight: connectivity.md
   - Output & interpretation: outputs.md
   - Validation & limitations: validation.md

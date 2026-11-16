@@ -1,5 +1,7 @@
 # net-distance-ph
 
+For a PSGC-aligned replacement to the older geoBoundaries ADM3 polygons, use `net-distance-ph boundaries --download` to validate the pinned 1,642-locality source, then `net-distance-ph boundaries --download --publish` to explicitly publish one Manila city polygon and the eight SGA municipalities. See [PSGC-aligned boundaries](docs/psgc_aligned_boundaries.md).
+
 **Reproducible road-and-ferry shortest-path distances between Philippine cities and municipalities.**
 
 The project builds an undirected graph from independently prepared or

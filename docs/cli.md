@@ -1,5 +1,7 @@
 # Unified command-line interface
 
+**Alternative 2026 PSGC-aligned geometry:** `net-distance-ph boundaries --download` validates the pinned third-party ADM3 ZIP; append `--publish` only after reviewing provenance. See [the boundary-source instructions](psgc_aligned_boundaries.md).
+
 `net-distance-ph` is the installed command for source preparation, nationwide graph
 construction, localities' modeled connectivity, graph reduction, matrix
 calculation, and numerical verification. It works from any working directory
