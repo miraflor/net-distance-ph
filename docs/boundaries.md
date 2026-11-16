@@ -104,7 +104,7 @@ A separately provided polygon layer can also be converted using `scripts/centroi
 
 ## Identifier warning
 
-The original saved matrix has historical identifiers like `PH0102801`. The PSA roster uses ten-digit codes such as `0102801000`. Although the seven-digit historical pattern may suggest a candidate for some localities, it **is not a guaranteed crosswalk** across administrative reorganizations. The converter validates candidate IDs against the selected roster and requires review on conflicting names. A freshly generated set of municipality points requires a **new** matrix run and a new stable row/column order.
+The Q2 2026 roster uses ten-digit codes such as `0102801000`. Older codes must be mapped through reviewed crosswalks, not inferred from code length or visual similarity. New locality points require a new network matrix.
 
 ## Boundaries versus road-network generation
 

@@ -43,12 +43,8 @@ integer** (leading zeros and prefixes matter). The optional `config.py`
 settings `CENTROID_ID_COL` and `CENTROID_NAME_COL` override field-name
 autodetection. Autodetection looks for code/PSGC-like and name-like fields.
 
-!!! warning "Historical identifiers are not automatically current PSGC codes"
-    The archived output contains identifiers such as `PH0102801`.
-    The PSA now publishes **10-digit PSGC codes**. Treat these as different
-    code systems until a verified, time-stamped concordance establishes a
-    one-to-one mapping. Changing polygons or point records does not update
-    the identities or the historical distance matrix automatically.
+!!! warning "Use a single administrative code vintage"
+    The Q2 2026 PSGC roster uses **ten-digit text identifiers**. If supplied point data use other codes, require an independently verified crosswalk. A changed roster or set of points requires a new matrix.
 
 The matrix order is **the order of rows in the point shapefile**, recorded in
 `towns.csv`. Never rely on alphabetical order or array position without

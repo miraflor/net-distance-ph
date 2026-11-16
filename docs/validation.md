@@ -43,6 +43,8 @@ pull request.
 
 ## Verification against the full graph
 
+These are **implemented checks**, not evidence of completed nationwide verification.
+
 ```bash
 python run.py verify
 ```
@@ -67,10 +69,6 @@ exiting non-zero on any failure:
   against the **unreduced** graph agrees within `VERIFY_TOL_KM`, with no
   reachability mismatch. Use `VERIFY_N_SOURCES` to choose the sample size.
 
-In the archived original run, 40 reference-source rows had no reachability
-mismatch and maximum difference about `2.14e-11 km` before the final
-symmetrization; this is a historical result, not a claim about new data.
-
 !!! warning "What verification does not prove"
     Agreement between the reduced and unreduced graphs proves the optimization
     preserves the *constructed graph's* paths. It does **not** prove that the
@@ -91,7 +89,6 @@ symmetrization; this is a historical result, not a claim about new data.
 | Rounding/noding based on coordinates | At-grade crossings can be omitted; distinct elevated levels could merge |
 | Optional ferry cost penalty per segment | Not ferry waiting time or one penalty per vessel crossing |
 | Snapshot-specific roster and codes | New PSGC releases require explicit crosswalk and new outputs |
-| No verified source hashes in old archive | Historical result cannot be exactly re-created from the code alone |
 
 ### Triangle inequality and snap offsets
 

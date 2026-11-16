@@ -133,6 +133,4 @@ selected completed rows against **fresh Dijkstra calculations on the unreduced
 graph**, checking that contraction, reordering, and wave scheduling did not
 change paths.
 
-For original implementation details and local benchmarks, see
-[historical engineering notes](engineering-notes.md). Those measurements are
-not promises for a new dataset or computer.
+The algorithm is specified here; its national performance, reachability and geographic accuracy remain unmeasured until tested on a current snapshot.

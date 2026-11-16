@@ -82,23 +82,9 @@ else:
 Large offsets, unresolved islands, and ferry-node snaps should be individually
 audited before using the matrix as a transport proxy.
 
-## Historical example, not a bundled dataset
+## National results
 
-The original completed archive's `matrix_report.json` reported:
-
-| Statistic | Original run |
-| --- | ---: |
-| Number of towns | 1,642 |
-| Snapped towns | 1,638 |
-| Completed rows | 1,642 |
-| Finite ordered matrix cells | 2,515,500 |
-| Infinite ordered matrix cells | 180,664 |
-| Largest finite entry | 2,198.027 km |
-| Max presymmetrization asymmetry | 2.73e-12 km |
-
-The counts and values are recorded for transparency, **not regenerated** by
-the GitHub-ready source package. The archived report did not include enough
-provenance metadata to independently verify its input snapshot or licensing.
+No completed nationwide matrix or route reachability report is published by this repository. Any future numerical result must name its source snapshot and run metadata.
 
 ## Important statistical distinctions
 

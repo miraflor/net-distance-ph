@@ -1,5 +1,7 @@
 # Changelog
 
+This records software development, not a completed or independently verified national run. Synthetic fixtures are not national empirical findings.
+
 ## Unreleased — repository and package name alignment
 
 - GitHub repository, Python distribution, user-facing project name, and GitHub Pages path use `net-distance-ph`.
@@ -90,9 +92,7 @@ a regression test that fails on the previous code.
 
 ## Pre-publication review corrections — 2026-11-05
 
-Distances computed with the default configuration are unchanged (bit-identical
-on the synthetic archipelago). Each fix below has a regression test that fails
-on the previous code.
+The changes below describe corrections exercised by synthetic regression tests; they are not nationwide validations.
 
 ### Correctness
 
@@ -113,7 +113,7 @@ on the previous code.
   an `out/` folder that does not match the core in `work/`.
 - **Triangle inequality documentation was wrong.** Adding connector offsets at
   both ends does not break the triangle inequality; it only adds slack.
-  Corrected in `run.py`, methodology, validation and the historical notes.
+  Corrected in `run.py`, methodology, and validation.
 - **Numeric ID fields.** A numeric PSGC field with a blank produced IDs such as
   `1380600000.0` and `nan` that passed validation. Such columns are rejected.
   IDs and names are no longer truncated to fixed widths (32/96 characters).
@@ -172,7 +172,7 @@ on the previous code.
 
 ## 0.1.0 — GitHub-ready source distribution (2026-11-05)
 
-### Preserved from the historical implementation
+### Implemented routing algorithms
 
 - Original WGS84 road/ferry edge construction, endpoint-only ferry connectors,
   centroid snapping, exact graph reduction, RCM reordering and Dijkstra waves.
@@ -190,14 +190,13 @@ on the previous code.
   and invalid centroid geographic coordinates.
 - New optional `scripts/centroids_from_boundaries.py` to prepare WGS84 point
   inputs from an independently sourced, PSGC-keyed polygon dataset.
-- Converted historical synthetic-archipelago test into a real CI regression;
+- Added a synthetic-archipelago CI regression;
   added boundary-converter and path-resolver tests.
 - Added packaging metadata, clean ignore rules, Linux/Windows CI,
   documentation for source lineage and modeling assumptions, and MkDocs-based
   GitHub Pages publishing workflow.
 
-### Explicitly not changed
+### Evidence boundary
 
-- No historic distance values were recalculated.
-- No external GIS data, third-party project code, road graphs or ferry graphs were copied.
-- No code license was selected; choose one before public distribution.
+- No completed nationwide distance result was established by these changes.
+- No derived national road graph or precomputed national matrix is bundled.

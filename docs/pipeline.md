@@ -122,12 +122,7 @@ these apart.
 
 ## Resource use and expected scale
 
-The *historical* input was about 1,642 localities with millions of raw graph
-nodes. Reduction accounted for the largest improvement compared with naive
-repeated Dijkstra; its performance and memory demands are highly dependent on
-network structure, available RAM, storage speed, process count and operating
-system. The earlier performance measurements are preserved in
-[engineering notes](engineering-notes.md), not advertised as universal speeds.
+The official Q2 2026 roster lists 1,642 localities, but actual graph size and performance are unmeasured until a new run. Runtime depends on topology, memory, storage, and worker configuration. No inherited speed benchmark should be used as an estimate.
 
 For your first new full-national run, record RAM and graph cardinalities after
 stage 1, run stage 2, and run verification before treating the matrix as

@@ -16,7 +16,7 @@ nav:
   - Independent boundary generation: boundaries.md
   - Independent transport extraction: transport.md
   - Reproducibility & attribution: reproducibility.md
-  - Engineering notes (historical): engineering-notes.md
+  - Run status: run-status.md
   - FAQ: faq.md
 theme:
   name: material

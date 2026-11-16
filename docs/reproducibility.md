@@ -39,8 +39,8 @@ OSM/administrative source files for long-term reproducibility.
 
 ## Source acknowledgments
 
-- **OpenStreetMap contributors:** road and ferry geometry in the historical
-  project came from OSM-derived shapefiles, typically via
+- **OpenStreetMap contributors:** the transport workflow uses OSM-derived
+  road and ferry geometry, which can be sourced via
   [Geofabrik](https://download.geofabrik.de/asia/philippines.html). Review the
   [OSM copyright/ODbL terms](https://www.openstreetmap.org/copyright),
   particularly before redistributing derived databases or published matrices.

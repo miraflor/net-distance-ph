@@ -7,10 +7,7 @@ Philippine city and municipality reference points** through a combined network
 of road polylines and mapped ferry routes. It is a batch research pipeline,
 not a navigation application, travel-time predictor, or official dataset.
 
-The original completed run covered **1,642 localities** and generated a
-`1,642 × 1,642` matrix. Those counts refer to its particular source vintage;
-new PSGC rosters and new geometry versions may differ. The GitHub repository
-contains **code and synthetic tests**, not the original national datasets.
+The Q2 2026 official PSGC roster lists **1,642 cities and municipalities**. This is an input target, **not** evidence that every locality has been connected or that a national matrix has been computed. See [run status](run-status.md).
 
 !!! info "In one sentence"
     The distance from locality A to locality B is the sum of the minimum
@@ -39,7 +36,7 @@ flowchart LR
 | `row_validity_radius_km.npy` | How far each row's computation is complete |
 | `matrix_report.json` | Completion, reachability and symmetry diagnostics |
 | `source_manifest.json` | Input shapefile SHA-256 hashes, geometry settings, and core identity |
-| `verification.txt` | Physical and numerical cross-checks |
+| `verification.txt` | Numerical checks against the modeled graph |
 
 ### What makes it different from a straight-line distance matrix?
 
@@ -51,6 +48,7 @@ road restrictions, schedules, traffic or whether a ferry actually operates.
 ### Documentation guide
 
 - [Getting started](getting-started.md) — install, inspect, calculate.
+- [Run status](run-status.md) — verified execution history and outstanding checks.
 - [Inputs and identifiers](inputs.md) — required schemas, CRS and PSGC caution.
 - [Methodology](methodology.md) — exact graph construction and algorithms.
 - [Pipeline](pipeline.md) — stages, flags and crash recovery.
@@ -70,7 +68,5 @@ who want an auditable national matrix. It is still the researcher's duty to
 justify whether geometric centroid travel distance measures the relevant
 spatial process.
 
-!!! warning "No precomputed distance claims"
-    The documentation describes algorithms and a historical completed run.
-    The actual dataset, source-date accuracy and ferry coverage of any **new**
-    national calculation depend on the GIS files that you supply.
+!!! warning "No nationally verified outputs"
+    The algorithms and synthetic fixtures do not establish nationwide route coverage. Complete source preparation, graph connectivity testing, and physical route auditing first.

@@ -85,8 +85,8 @@ def rcm_reorder(u, v, w, n_nodes, src_nodes, verbose=True):
 
     Pure cache locality: RCM clusters each node's neighbours near it in index
     space, so Dijkstra's random-looking adjacency reads land in the same cache
-    lines. Measured at 1.44x on a core graph of this shape. It is a permutation
-    of node labels and changes no distance whatsoever.
+    lines. It permutes node labels without changing path lengths; runtime
+    effects must be measured on the actual graph.
     """
     G = build_csr(u, v, w, n_nodes)
     perm = reverse_cuthill_mckee(G, symmetric_mode=True)

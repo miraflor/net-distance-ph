@@ -6,8 +6,9 @@ The project builds an undirected graph from independently prepared or
 user-supplied OpenStreetMap road and ferry-route shapefiles, attaches locality reference points, contracts the
 network without changing shortest-path distances, and computes a square matrix
 in kilometres. It is designed for national-scale runs with resumable stages,
-clear row/column identifiers, and empirical verification against the original
-unreduced graph.
+clear row/column identifiers, and numerical verification against the corresponding unreduced graph.
+
+**National-run status:** No completed nationwide distance matrix or nationwide connectivity result has been established by a user-confirmed `net-distance-ph` run. Inherited numerical results are excluded. See [Run status](docs/run-status.md).
 
 **[Documentation (GitHub Pages after deployment)](https://miraflor.github.io/net-distance-ph/)** ·
 [Methodology](docs/methodology.md) · [Inputs](docs/inputs.md) ·
@@ -124,7 +125,7 @@ ferry/network audit are **not yet verified** by the offline synthetic tests.
 
 ## Scope and safeguards
 
-- **Preserved:** original network, contraction, neighbor-wave, and verification algorithms. With the default configuration the computed distances are bit-identical to the historical implementation on the synthetic test archipelago.
+- **Implemented:** road/ferry network construction, contraction, neighbor-wave Dijkstra and verification against the unreduced graph. Synthetic tests do **not** establish nationwide correctness or connectivity.
 - **Improved:** portable paths, atomic release pointers, SHA-256 input validation across all stages, stable text-ID validation, stale-checkpoint prevention, prompt Ctrl-C, effective numerical verification, independent boundary and transport extraction, automated regression tests, and GitHub Actions. See the [changelog](CHANGELOG.md).
 - **Not included:** private local paths, national input shapefiles, intermediate graph arrays, or previously calculated matrices. Do not publish datasets without reviewing licensing and provenance.
 - **Model assumptions:** undirected roads/ferries, geometry-based path lengths, optional centroid connector distance, and optional per-ferry-segment cost adjustment. These are **not** observed travel times or a turn-restricted transportation model.

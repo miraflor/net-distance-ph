@@ -64,11 +64,9 @@ content-hashed provenance manifest and is not a statement about ferry
 operating status, road restrictions, or full national network correctness.
 See [transport inputs](transport.md).
 
-### Can I reuse the old matrix when I replace the boundaries?
+### Can I reuse a matrix after changing boundary inputs?
 
-Not if the new reference points change coordinates or IDs. Generate a new
-matrix and retain both vintages, with explicit metadata and a validated code
-crosswalk when comparisons are necessary.
+No, not if origin coordinates or identifiers change. Build a new matrix and retain its source provenance.
 
 ### Why is `work/` so large and ignored by Git?
 
@@ -77,16 +75,6 @@ and temporary matrices. Those can be regenerated from original inputs; they
 are excluded from the source repository to prevent accidental distribution of
 large or licensed datasets.
 
-### Why is there a warning that the original PSGC IDs were different?
+### How can I test whether every town is reachable?
 
-The archived outputs use `PH...` identifiers, not consistently the current
-PSA ten-digit PSGC representation. Identifier equality is a data-matching
-claim, not a matter of formatting. Require an explicit concordance.
-
-### How can I reproduce the original 1,642-town matrix exactly?
-
-You need the original shapefiles, exact point coordinates and IDs, the
-corresponding config parameters and dependency versions. The archive of the
-original run held outputs and intermediate graph files, **not the three
-source shapefiles**. The repository alone therefore cannot reconstruct the
-old source snapshot.
+After building the graph, verify full official PSGC coverage and snapping, then test whether all town-attached graph nodes share a single connected component. Real-world ferry and road availability still require independent auditing.

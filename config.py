@@ -8,7 +8,7 @@ import os
 # --------------------------------------------------------------------------
 # Paths
 # --------------------------------------------------------------------------
-# Keep the historical input filenames and algorithm defaults unchanged.
+# Stable input filenames and explicit routing defaults.
 # Paths are relative to this repository unless overridden by environment
 # variables. No private machine paths or raw datasets are committed.
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -84,8 +84,7 @@ REDUCE_CHECKPOINT_EVERY_PASSES = 1
 # Reduction, part two
 # --------------------------------------------------------------------------
 # Relabel core nodes in reverse Cuthill-McKee order before routing. Pure cache
-# locality -- it changes no distance -- and measured at 1.44x on a core graph
-# of this shape. No reason to turn it off except to reproduce old node ids.
+# locality -- it changes no distance. Benchmark speed on your own graph.
 RCM_REORDER = True
 
 # --------------------------------------------------------------------------
@@ -108,9 +107,8 @@ SOURCE_ORDER = "knn_bfs"  # "knn_bfs" or "input"
 # almost immediately; an unlimited wave is always appended last, so the final
 # matrix is identical either way.
 #
-# The waves cost extra -- roughly +20% total for this default -- because a
-# radius-limited run cannot be resumed into a wider one. Set WAVE_ORDERS = ()
-# to pay nothing and get no early output.
+# Extra waves cost additional Dijkstra work; benchmark with your own graph.
+# Set WAVE_ORDERS = () to skip early waves.
 WAVE_ORDERS = (1, 2)
 
 # Network distance always exceeds straight-line distance, often by a lot in an
