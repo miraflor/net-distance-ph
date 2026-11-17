@@ -106,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     selectors.add_argument("--only", choices=STAGES, metavar="STAGE", help="run only STAGE")
     selectors.add_argument("--all", action="store_true", help="run all stages (connectivity is a gate)")
 
+    # Optional population-weighted matrices; baseline run stages remain unchanged.
+    p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
+    from .population_weighted import add_run_arguments
+    add_run_arguments(p)
+
     p = sub.add_parser("status", help="show which inputs, artifacts and reports exist (no computation)")
     _add_shared(p, stage="status")
     p.add_argument("--json", action="store_true", help="print machine-readable status")
@@ -290,6 +295,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         return _doctor(args)
     try:
+        if args.command == "population-weighted":
+            from .population_weighted import run_options
+            return run_options(args)
         if args.command == "inspect-osm-gaps":
             from .osm_gap_inspection import run as run_osm_inspection
             return run_osm_inspection(workspace=_effective_workspace(args),

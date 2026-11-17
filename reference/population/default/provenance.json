@@ -1,0 +1,10 @@
+{
+  "schema": "net-distance-ph/plain-population-dataset/v1",
+  "source": "Philippine Statistics Authority PSGC Q2 2026; 2024 barangay population",
+  "original_source_sha256": "4df5deb3162b9873d0d6d12fe7317c3f8f0ddc8ce555b7d36fc76cb2b9185b29",
+  "units_sha256": "a13e4b3f5a79560453673649348edbba4c45deccde12a74fab5f43f87584dca2",
+  "population_sha256": "ff4d02d9623e7923fd43af4d75e74c1349872dfa3059fca3ab75669d387df465",
+  "n_units": 43752,
+  "n_barangays": 42010,
+  "population_total": 112727776
+}
