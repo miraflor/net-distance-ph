@@ -16,6 +16,8 @@ from pathlib import Path
 import sys
 import time
 
+from scripts.build_transport import public_motorcar_access
+
 # Nondefault road classes worth testing. The current filter is loaded from the
 # selected TRANSPORT RELEASE, not hard-coded here.
 ORDINARY_EXTRA = frozenset({
@@ -63,14 +65,22 @@ def _read_gap_csv(path: Path, top: int) -> list[dict]:
             continue  # no road vertices in a component
         if not math.isfinite(v) or v < 0 or not all(math.isfinite(z) for p in (r["a"], r["b"]) for z in p):
             raise ValueError(f"Invalid component gap coordinate or metric: {r['component']}")
-        if not all(115 <= p[0] <= 128 and 4 <= p[1] <= 22 for p in (r["a"], r["b"])):
-            raise ValueError(f"Gap outside expected Philippine coordinate domain: {r['component']}")
         r["km"] = v
         valid.append(r)
     valid.sort(key=lambda row: (row["km"], row["component"]))
     if len({r["component"] for r in valid}) != len(valid):
         raise ValueError("Duplicate component IDs in gap report")
-    return valid[:top]
+    # Check only the gaps requested for examination. Faraway components must
+    # not prevent a --top N inspection of local road-network breaks.
+    selected = valid[:top]
+    for row in selected:
+        # WGS84 validity is global: Kalayaan (Pag-asa Island, ~114.3 E) is
+        # within the Philippines' locality roster but west of an old hardcoded
+        # [115, 128] longitude envelope. No arbitrary country bounding box.
+        if not all(-180 <= p[0] <= 180 and -90 <= p[1] <= 90
+                   for p in (row["a"], row["b"])):
+            raise ValueError(f"Invalid WGS84 longitude/latitude in gap: {row['component']}")
+    return selected
 
 
 def _metres(p, q) -> float:
@@ -106,8 +116,8 @@ def _rounded_point(p) -> tuple[int, int]:
 
 
 def _is_restricted(tags: dict) -> bool:
-    return any(str(tags.get(key, "")).lower() in RESTRICTED
-               for key in ("access", "vehicle", "motor_vehicle", "motorcar"))
+    """Exactly match the transport builder's most-specific vehicle access rule."""
+    return not public_motorcar_access(tags)
 
 
 def _is_public_extra(tags: dict) -> bool:
@@ -177,8 +187,11 @@ def extract_nearby_ways(source: Path, gaps: list[dict], radius_m: float) -> tupl
                     continue
                 found[row["component"]].append({
                     "way_id": int(way.id), "highway": highway if not ferry else "ferry_route",
-                    "tags": {k: tags.get(k, "") for k in
-                             ("access", "vehicle", "motor_vehicle", "motorcar", "oneway", "bridge", "tunnel", "layer", "service", "area", "route")},
+                    # Preserve absent tags as absent. The builder consults the first
+                    # PRESENT access tag by specificity; an injected motorcar=""
+                    # would mask a real, less-specific access=private restriction.
+                    "tags": {k: tags[k] for k in
+                             ("access", "vehicle", "motor_vehicle", "motorcar", "oneway", "bridge", "tunnel", "layer", "service", "area", "route") if k in tags},
                     "nodes": nodes, "near_gap_m": d,
                 })
     h = Handler()
@@ -200,6 +213,11 @@ def _path(ways: list[dict], row: dict, radius_m: float, baseline: set[str], mode
     for way in ways:
         highway = way["highway"]
         if highway not in allowable or way["tags"].get("route") == "ferry":
+            continue
+        # A selected highway class is NOT proof that the OSM way was extracted:
+        # the transport builder also rejects explicit private/prohibited motor access.
+        # This applies to ALL classes, not only hypothetical extra ones.
+        if not public_motorcar_access(way["tags"]):
             continue
         if highway not in baseline and not _is_public_extra(way["tags"]):
             continue
@@ -300,7 +318,7 @@ def examine(gaps: list[dict], nearby: dict[str, list[dict]], baseline: set[str],
         summary.append(obj)
         for w in sorted(ways, key=lambda z: (z["near_gap_m"], z["way_id"])):
             if w["highway"] in baseline:
-                group = "included"
+                group = "included" if public_motorcar_access(w["tags"]) else "excluded_access"
             elif w["highway"] in ORDINARY_EXTRA:
                 group = "ordinary_extra" if _is_public_extra(w["tags"]) else "restricted_or_area"
             elif w["highway"] in SERVICE_EXTRA:
@@ -395,6 +413,7 @@ def run(*, workspace: Path, top: int = 9, radius_m: float = 1000.0) -> int:
               "radius_m": radius_m, "gaps_inspected": len(gaps),
               "scanning_counts": counts, "verdict_counts": dict(status),
               "warnings": ["Paths use shared OSM node IDs and a LOCAL radius, and treat edges as undirected.",
+                           "All candidate OSM road ways use the same public motorcar-access rule as the selected transport builder; class membership alone is insufficient.",
                            "An observed OSM path does not prove legal vehicle access, ferry service, or valid elevation topology.",
                            "No path is inconclusive: a connecting route may run outside the radius.",
                            "Endpoint match requires graph rounding at six decimal places; unmatched endpoints are not evidence of no road.",
