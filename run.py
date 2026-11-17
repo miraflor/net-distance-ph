@@ -415,6 +415,7 @@ def stage_graph(args):
 # ===========================================================================
 def stage_reduce(args):
     t0 = time.time()
+    from net_distance_ph.fast_reduce import reduce_fast
     work = Path(C.WORK)
     work.mkdir(parents=True, exist_ok=True)
     checkpoint_path = work / "reduce_checkpoint.npz"
@@ -424,10 +425,7 @@ def stage_reduce(args):
     log("")
     log("[2/4] reducing to a core graph")
     log(f"  progress log: {log_path}")
-    log(
-        f"  heartbeat every {C.REDUCE_HEARTBEAT_SECONDS:g}s; "
-        f"checkpoint every {C.REDUCE_CHECKPOINT_EVERY_PASSES} completed pass(es)"
-    )
+    log("  method: one-pass terminal leaf pruning and exact degree-2 chain compression")
 
     graph_path = work / "graph_full.npz"
     source_path = work / "sources.npz"
@@ -446,6 +444,7 @@ def stage_reduce(args):
         snapped = s["tier"] >= 0
         src_orig, inv = np.unique(s["node_idx"][snapped], return_inverse=True)
         src_lonlat = node_lonlat[src_orig]
+        del node_lonlat  # free the national coordinate array before contraction
         log(f"  {int(snapped.sum()):,} snapped towns on {src_orig.size:,} distinct nodes")
 
         resume = False
@@ -545,20 +544,10 @@ def stage_reduce(args):
         )
         log(f"    checkpoint saved in {time.time() - started:.1f}s")
 
-    u, v, w, alive = rd.reduce_to_core(
-        u, v, w, n_nodes, src,
-        max_degree=C.MAX_CONTRACT_DEGREE,
-        max_edge_growth=C.MAX_EDGE_GROWTH,
-        alive=alive,
-        best_edges=best_edges,
-        start_phase=start_phase,
-        start_pass=start_pass,
-        completed_passes=completed_passes,
-        initial_nodes=None if initial_nodes is None or initial_nodes < 0 else initial_nodes,
-        initial_edges=None if initial_edges is None or initial_edges < 0 else initial_edges,
-        checkpoint=save_pass,
-        heartbeat_seconds=C.REDUCE_HEARTBEAT_SECONDS,
-        progress=log,
+    # Existing legacy pass checkpoints can be resumed by this exact fast path.
+    # No new multi-GB checkpoint is written until the smaller core is ready.
+    u, v, w, alive = reduce_fast(
+        u, v, w, n_nodes, src, alive=alive, progress=log
     )
 
     log(f"  compacting surviving node IDs...")
