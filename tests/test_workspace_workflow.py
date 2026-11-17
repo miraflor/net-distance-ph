@@ -105,9 +105,17 @@ def test_run_log_prefixes_each_line_and_preserves_stdout(tmp_path, capsys):
         print("warning", file=sys.stderr)
     assert sys.stdout is original
     text = logfile.read_text(encoding="utf-8")
-    assert "[INFO] one" in text and "[INFO] two" in text
-    assert "[ERROR] warning" in text
-    assert re.search(r"\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\] \[INFO\] one", text)
+    dated = r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]"
+    assert re.search(rf"(?m)^{dated} one$", text)
+    assert re.search(rf"(?m)^{dated} two$", text)
+    assert re.search(rf"(?m)^{dated} warning$", text)
+    assert "[INFO]" not in text and "[ERROR]" not in text
+    assert not re.search(r"(?m)^\[\d{4}-\d{2}-\d{2}T", text)
+
+    captured = capsys.readouterr()
+    clock = r"\[\d{2}:\d{2}:\d{2}\]"
+    assert re.search(rf"(?m)^{clock} one$", captured.out)
+    assert re.search(rf"(?m)^{clock} warning$", captured.err)
 
 
 def test_legacy_network_layers_do_not_require_attribute_tables(tmp_path, monkeypatch):
