@@ -106,6 +106,17 @@ def build_parser() -> argparse.ArgumentParser:
     selectors.add_argument("--only", choices=STAGES, metavar="STAGE", help="run only STAGE")
     selectors.add_argument("--all", action="store_true", help="run all stages (connectivity is a gate)")
 
+    # Native, preview-first cleanup of computed state and generated artifacts.
+    p = sub.add_parser("reset", help="preview or erase generated project state (safe by default)")
+    p.add_argument("--workspace", type=Path, help="workspace directory (default: ~/Documents/net-distance-ph)")
+    p.add_argument("--all", action="store_true", help="also clean the checkout to its pushed current branch")
+    p.add_argument("--purge-patch-artifacts", action="store_true",
+                   help="also remove enumerated old patch archives, extracted installers, and backups")
+    p.add_argument("--execute", action="store_true", help="perform deletion after typed confirmation; default is preview")
+    p.add_argument("--run", action="store_true", help="after --all --execute, build prepare -> graph -> population-weighted")
+    p.add_argument("--workers", type=int, default=2, help="routing worker processes for optional fresh run")
+    p.add_argument("--heartbeat-seconds", type=float, default=30.0, help="heartbeat interval for fresh run")
+
     # Optional population-weighted matrices; baseline run stages remain unchanged.
     p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
     from .population_weighted import add_run_arguments
@@ -290,6 +301,13 @@ def _doctor(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "reset":
+        from .reset import run as reset_run
+        try:
+            return reset_run(args)
+        except (ValueError, OSError, RuntimeError) as exc:
+            print(f"RESET REFUSED: {exc}", file=sys.stderr)
+            return 2
     if args.command == "status":
         return _status(args)
     if args.command == "doctor":

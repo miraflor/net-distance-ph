@@ -103,3 +103,31 @@ review long centroid snaps and ferry terminals, and run final verification.
 ## Examine the cached OSM source at component gaps (read only)
 
 `net-distance-ph inspect-osm-gaps --top 9 --radius-m 1000` scans the cached OSM PBF and tests whether omitted road classes create local shared-node paths. No roads or graph edges are changed. See [OSM gap inspection](osm_gap_inspection.md).
+
+## Factory reset and clean-room experiment
+
+`net-distance-ph reset` is preview-only unless you add `--execute` and type an
+explicit confirmation phrase. This command does not change Git history and
+never deletes source committed to the current branch.
+
+```powershell
+net-distance-ph reset                                  # preview workspace deletion
+net-distance-ph reset --all --purge-patch-artifacts     # inventory every cleanup target
+net-distance-ph reset --all --purge-patch-artifacts --execute
+net-distance-ph reset --all --purge-patch-artifacts --execute --run
+```
+
+`--all` requires a clean, pushed checkout tracking `origin/<current branch>`;
+execution fetches that branch and refuses any local/remote commit mismatch.
+It performs `git reset --hard` to that same commit and `git clean -ffdx`, then
+removes the entire selected `~/Documents/net-distance-ph` workspace. Optional
+`--purge-patch-artifacts` removes **only** the enumerated historical patch ZIPs,
+extracted installers, review bundle, and backup directories. Never use this
+command if you need data from those paths; this deletion is irreversible.
+
+Add `--run` to the destructive `--all` reset to rebuild from scratch with per-
+stage timing: `prepare`, `graph`, then `population-weighted` using balanced
+adaptive k-medians and Faeldon barangay geometry. This is independent of the
+centroid-based reduce/matrix pipeline. Fresh-run journal/summary and timestamped
+stage logs are stored under `~/Documents/net-distance-ph/logs/`.
+
