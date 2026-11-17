@@ -126,6 +126,7 @@ def _selected(root, pointer_name, filename_by_key):
     Never silently pick an orphaned release, assume an incomplete set is valid,
     or overwrite an invalid release pointer.
     """
+    from .source_names import accepted_source_names
     root = Path(root)
     pointer = root / pointer_name
     if pointer.exists():
@@ -137,7 +138,7 @@ def _selected(root, pointer_name, filename_by_key):
                     raise ValueError(f"unsafe relative path for {key}")
                 candidate = (root / rel).resolve()
                 candidate.relative_to(root.resolve())
-                if candidate.name != filename:
+                if candidate.name not in accepted_source_names(key):
                     raise ValueError(f"unexpected name for {key}: {candidate.name}")
                 for ext in (".shp", ".shx", ".dbf"):
                     if not candidate.with_suffix(ext).is_file():
@@ -164,7 +165,8 @@ def _selected(root, pointer_name, filename_by_key):
     # for which the selection pointer is missing.
     hits_by_key = {}
     for key, filename in filename_by_key.items():
-        hits = [p for p in root.rglob(filename) if not any(
+        hits = [p for allowed in accepted_source_names(key)
+                for p in root.rglob(allowed) if not any(
             piece in ("boundary_releases", "transport_releases", "boundary_build_incomplete")
             for piece in p.relative_to(root).parts)] if root.exists() else []
         hits_by_key[key] = hits

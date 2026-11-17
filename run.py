@@ -96,12 +96,20 @@ def _locate(filename: str) -> Path:
                     raise ValueError("path must be relative to data root")
                 chosen = (root / relative).resolve()
                 chosen.relative_to(root.resolve())
-                if chosen.name != filename or not chosen.is_file():
+                from net_distance_ph.source_names import accepted_source_names
+                if chosen.name not in accepted_source_names(key) or not chosen.is_file():
                     raise ValueError(f"missing selected file: {chosen}")
             except (KeyError, ValueError, OSError, json.JSONDecodeError) as exc:
                 raise InputError(f"Invalid {pointer}: {exc}") from exc
             return chosen
-    hits = sorted(root.rglob(filename))
+    if filename in pointers:
+        # With no release pointer, accept either canonical or original names.
+        # More than one candidate is still an error, never an arbitrary pick.
+        from net_distance_ph.source_names import accepted_source_names
+        search_names = accepted_source_names(pointers[filename][1])
+    else:
+        search_names = (filename,)
+    hits = sorted({p for name in search_names for p in root.rglob(name)})
     if not hits:
         raise InputError(f"Missing {filename} beneath {root}.")
     if len(hits) > 1:

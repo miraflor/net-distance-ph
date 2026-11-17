@@ -19,6 +19,7 @@ nav:
   - Validation & limitations: validation.md
   - Independent boundary generation: boundaries.md
   - Independent transport extraction: transport.md
+  - Source file naming: source_names.md
   - Road profiles: road_profiles.md
   - Reproducibility & attribution: reproducibility.md
   - Run status: run-status.md

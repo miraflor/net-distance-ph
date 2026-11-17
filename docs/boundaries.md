@@ -92,7 +92,7 @@ The source ID above is a **placeholder**, not a real match. Replace it with the 
 | --- | --- |
 | `data/current_boundaries.json` | Atomic pointer to the selected, complete boundary release |
 | `data/boundary_releases/<release-id>/municipality_boundaries.gpkg` | Reconciled WGS84 polygons (`areas` layer) |
-| `data/boundary_releases/<release-id>/muncity_centroids.shp` plus sidecars | Locality origin points for the routing pipeline |
+| `data/boundary_releases/<release-id>/locality_origins.shp` plus sidecars (new releases) | Locality origin points for the routing pipeline |
 | `data/boundary_releases/<release-id>/boundary_match_audit.csv` | Every matching decision and exception |
 | `data/boundary_releases/<release-id>/boundary_provenance.json` | Source paths/hashes, versions, counts, output hashes |
 | `data/boundary_build_incomplete/` | Audit and provenance of the latest *incomplete reconciliation* |

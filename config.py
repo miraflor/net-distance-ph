@@ -8,7 +8,9 @@ import os
 # --------------------------------------------------------------------------
 # Paths
 # --------------------------------------------------------------------------
-# Stable input filenames and explicit routing defaults.
+# Legacy standalone-input names retained as lookup keys for compatibility.
+# Newly generated, versioned releases use role-based filenames specified in
+# net_distance_ph.source_names; the selected release pointers determine paths.
 # Paths are relative to this repository unless overridden by environment
 # variables. No private machine paths or raw datasets are committed.
 PROJECT_DIR = Path(__file__).resolve().parent

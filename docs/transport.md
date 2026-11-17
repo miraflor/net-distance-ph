@@ -43,14 +43,14 @@ A tiny `.osm` XML fixture is also accepted for testing; this path is not designe
 
 | Output | Default OSM selection | Interpretation |
 | --- | --- | --- |
-| `primsectertrunk_road.shp` | Default `comprehensive`: trunk, primary, secondary, tertiary, unclassified, residential, motorway, service, living_street, and five road `_link` classes | Fourteen tagged classes (not legal/directional routing); use `--road-profile major` for the former four-class baseline |
-| `ferry_route_shape.shp` | Ways tagged `route=ferry`; plus *route* member ways of `type=route` + `route=ferry` relations (see below) | Mapped ferry geometries, not verified live ferry services |
+| `roads.shp` | Default `comprehensive`: trunk, primary, secondary, tertiary, unclassified, residential, motorway, service, living_street, and five road `_link` classes | Fourteen tagged classes (not legal/directional routing); use `--road-profile major` for the former four-class baseline |
+| `ferry_routes.shp` | Ways tagged `route=ferry`; plus *route* member ways of `type=route` + `route=ferry` relations (see below) | Mapped ferry geometries, not verified live ferry services |
 
 This is a **defined new extraction recipe**, not a claim to reproduce a historical Geofabrik shapefile byte-for-byte. The original shapefile may have used other tag, date, clipping or cleanup criteria.
 
 The **default `comprehensive` profile** includes expressways (including NLEX/SLEX), ramps and connector roads, local residential roads, service roads, and living streets. It excludes pedestrian paths, tracks, cycleways, and other non-motor-road classes. An explicitly recorded `motorcar`, `motor_vehicle`, `vehicle`, or `access` tag of `no`, `private`, `agricultural`, `forestry`, or `delivery` excludes a road, with the more-specific tag taking precedence. `destination`, `customers` and conditional permissions are not fully modeled; **the resulting graph is not a legally verified car router**. One-way restrictions and turn restrictions also remain unmodeled.
 
-For the historical major-road-only class selection use `--road-profile major`. Because access filtering is new, a re-extraction is not necessarily byte-identical to the earlier four-class release; the original immutable release is retained for exact reference. With that profile `--include-links` and `--include-motorways` retain their former opt-in meanings. The file keeps its historical `primsectertrunk_road.shp` name regardless of profile, while `transport_provenance.json` and each road DBF preserve the exact classes and way-level `OSM_CLASS` attributes. See [road profiles](road_profiles.md).
+For the historical major-road-only class selection use `--road-profile major`. Because access filtering is new, a re-extraction is not necessarily byte-identical to the earlier four-class release; the original immutable release is retained for exact reference. With that profile `--include-links` and `--include-motorways` retain their former opt-in meanings. New transport releases use `roads.shp` regardless of road profile; existing releases retain their original names. `transport_provenance.json` and each road DBF preserve the exact classes and way-level `OSM_CLASS` attributes. See [road profiles](road_profiles.md).
 
 **Which members of a ferry relation count as the crossing.** A ferry route relation usually lists more than the sea crossing: approach roads, terminal platforms and pier outlines. Each member carries a *role* label, empty for the route line itself and `platform` or `stop` for terminals. A member way is taken as a ferry line only if its role is empty, `forward` or `backward`; it has no `highway` tag; it has no facility tag (`public_transport`, `amenity`, `man_made`, `building`); it is not `area=yes`; and it is not a closed ring. A `highway`-tagged member keeps its road class (or is left out if that class is not selected). The PBF scan prints how many members each excluded role had. Without these rules, a platform polygon became a closed "ferry route" ring with a gangway candidate, and an approach road was moved from the road layer into the ferry layer.
 
@@ -72,8 +72,8 @@ data/
 ├── current_transport.json              # atomic selection pointer
 └── transport_releases/
     └── <release-id>/
-        ├── primsectertrunk_road.shp     # plus sidecars and provenance
-        ├── ferry_route_shape.shp        # plus sidecars and provenance
+        ├── roads.shp                   # plus sidecars and provenance
+        ├── ferry_routes.shp            # plus sidecars and provenance
         └── transport_provenance.json
 ```
 

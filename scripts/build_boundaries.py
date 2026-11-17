@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from net_distance_ph.source_names import canonical_name
+
 PSA_Q2_2026 = "https://psa.gov.ph/system/files/scd/PSGC-2Q-2026-Publication-Datafile.xlsx"
 BUNDLED_PSGC_JSON = Path(__file__).resolve().parents[1] / "reference" / "psgc" / "psgc_q2_2026_localities.json"
 GEOBOUNDARIES_ADM3 = "https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM3/"
@@ -501,7 +503,7 @@ def build(args):
             if exc.name != "scripts":
                 raise
             from centroids_from_boundaries import convert
-        points_file = staged / "muncity_centroids.shp"
+        points_file = staged / canonical_name("centroids")
         converter_meta = convert(argparse.Namespace(
             boundaries=staged_boundaries, layer="areas", output=points_file,
             code_column="psgc_code", name_column="name", kind_column=None,
@@ -511,7 +513,7 @@ def build(args):
         # The converter initially sees a private staging path. Use the future
         # immutable release path in its published provenance instead.
         converter_meta["source_file"] = str(destination / "municipality_boundaries.gpkg")
-        converter_meta["output"] = str(destination / "muncity_centroids.shp")
+        converter_meta["output"] = str(destination / canonical_name("centroids"))
         points_file.with_suffix(".provenance.json").write_text(
             json.dumps(converter_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
@@ -531,7 +533,7 @@ def build(args):
     record = {
         "schema": 1, "release_id": release_id,
         "boundaries": (base / "municipality_boundaries.gpkg").as_posix(),
-        "centroids": (base / "muncity_centroids.shp").as_posix(),
+        "centroids": (base / canonical_name("centroids")).as_posix(),
         "audit": (base / "boundary_match_audit.csv").as_posix(),
         "provenance": (base / "boundary_provenance.json").as_posix(),
         "source_fingerprint": provenance["output_boundaries_sha256"],
@@ -549,7 +551,7 @@ def build(args):
     if attempt_dir.exists():
         shutil.rmtree(attempt_dir)  # diagnostics of an earlier failed attempt
     print(f"SUCCESS: {len(geo):,} independently matched boundaries in {destination}")
-    print(f"Prepared road-network origins: {destination / 'muncity_centroids.shp'}")
+    print(f"Prepared road-network origins: {destination / canonical_name('centroids')}")
     print(f"Current release selected by: {pointer}")
     return True
 

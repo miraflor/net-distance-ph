@@ -62,9 +62,13 @@ The input directory must contain these WGS84 shapefiles (subfolders are allowed)
 
 | Input | Required basename | Purpose |
 | --- | --- | --- |
-| Road polylines | `primsectertrunk_road.shp` | Road network edges |
-| Ferry polylines | `ferry_route_shape.shp` | Sea connections |
-| Locality points | `muncity_centroids.shp` | Matrix origin/destination points, text IDs and labels |
+| Road polylines | `roads.shp` | Road network edges |
+| Ferry polylines | `ferry_routes.shp` | Sea connections |
+| Locality points | `locality_origins.shp` | Matrix origin/destination points, text IDs and labels |
+
+The original three basenames remain valid for legacy/manual sources, and
+published release pointers resolve both naming schemes. See
+[source naming](docs/source_names.md).
 
 Configure input, work and output locations using `--data`, `--work`, `--out`,
 or the `NET_DISTANCE_PH_DATA`, `NET_DISTANCE_PH_WORK`, and

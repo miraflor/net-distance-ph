@@ -24,6 +24,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 from net_distance_ph.provenance import sha256_file
+from net_distance_ph.source_names import canonical_name
 
 GEOFABRIK_URL = "https://download.geofabrik.de/asia/philippines-latest.osm.pbf"
 # Reproducible historical four-class reference profile.
@@ -237,8 +238,8 @@ def _extract(source: Path, stage: Path, classes: set[str], allow_no_ferries=Fals
         import shapefile
     except ImportError as exc:
         raise RuntimeError("Install PyShp: pip install -e '.[transport]'") from exc
-    road = stage / "primsectertrunk_road.shp"
-    ferry = stage / "ferry_route_shape.shp"
+    road = stage / canonical_name("roads")
+    ferry = stage / canonical_name("ferries")
     counts = Counter()
     rejected = Counter()
     with shapefile.Writer(str(road), shapeType=shapefile.POLYLINE, encoding="utf-8") as roads, \
@@ -391,12 +392,12 @@ def build(args):
             "extraction_counts": counts, "crs": "EPSG:4326", "distance_measure": "geometry lengths; not travel time",
             "license_notice": "OpenStreetMap contributors (ODbL); comply with OSM attribution and database terms",
         }
-        for filename in ("primsectertrunk_road.shp", "ferry_route_shape.shp"):
+        for filename in (canonical_name("roads"), canonical_name("ferries")):
             path = staging / filename
             sidecars = {extension: sha256_file(path.with_suffix(extension))
                         for extension in (".shp", ".shx", ".dbf", ".prj", ".cpg")}
             manifest[filename] = sidecars
-            is_road = filename.startswith("prim")
+            is_road = filename == canonical_name("roads")
             path.with_suffix(".provenance.json").write_text(
                 json.dumps({"source_sha256": source_hash,
                             "filter": manifest["road_filter"] if is_road else FERRY_FILTER,
@@ -408,8 +409,8 @@ def build(args):
         os.replace(staging, destination)
     base = Path("transport_releases") / release_id
     release = {"schema": 1, "release_id": release_id,
-               "roads": (base / "primsectertrunk_road.shp").as_posix(),
-               "ferries": (base / "ferry_route_shape.shp").as_posix(),
+               "roads": (base / canonical_name("roads")).as_posix(),
+               "ferries": (base / canonical_name("ferries")).as_posix(),
                "provenance": (base / "transport_provenance.json").as_posix(),
                "source_sha256": source_hash}
     _atomic_json(pointer, release)

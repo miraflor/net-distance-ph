@@ -4,13 +4,17 @@
 
 | Layer | Geometry | Filename | Required attributes |
 | --- | --- | --- | --- |
-| Road network | PolyLine (including 3D/M variants) | `primsectertrunk_road.shp` | None used for routing |
-| Ferry routes | PolyLine (including multipart) | `ferry_route_shape.shp` | None used for routing |
-| Locality origins | Point (including Z/M variants) | `muncity_centroids.shp` | Unique text code and name in `.dbf` |
+| Road network | PolyLine (including 3D/M variants) | `roads.shp` (new releases) | None used for routing |
+| Ferry routes | PolyLine (including multipart) | `ferry_routes.shp` (new releases) | None used for routing |
+| Locality origins | Point (including Z/M variants) | `locality_origins.shp` (new releases) | Unique text code and name in `.dbf` |
 
 All spatial coordinates are interpreted as longitude and latitude in decimal
 degrees, WGS84. Polyline shapefiles are read with a lightweight parser; no
 GeoPandas runtime dependency is needed for the main computation.
+
+The filenames above are class- and boundary-level-neutral. Older selected
+releases retain `primsectertrunk_road.shp`, `ferry_route_shape.shp`, and
+`muncity_centroids.shp` and remain compatible. See [source file naming](source_names.md).
 
 The project can now build transport layers directly from an upstream OSM
 snapshot using [the independent transport builder](transport.md), and origin

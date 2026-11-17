@@ -16,6 +16,7 @@ import shutil
 from types import SimpleNamespace
 
 from . import boundaries as upstream
+from .source_names import canonical_name
 
 LEVELS = ("town", "barangay", "city", "municipality", "huc", "province", "region")
 # Release v1.0.1 asset hashes, retrieved from the release's SHA256SUMS listing.
@@ -164,7 +165,7 @@ def _save_release(frame, roster, report, workspace: Path, *, replace: bool):
         raise FileExistsError(f"Existing release directory requires review: {dest}")
     dest.mkdir(parents=True, exist_ok=False)
     gpkg = dest / "boundaries.gpkg"
-    points = dest / "muncity_centroids.shp"
+    points = dest / canonical_name("centroids")
     try:
         frame.to_file(gpkg, layer="areas", driver="GPKG", index=False)
         readback = __import__("geopandas").read_file(gpkg, layer="areas")

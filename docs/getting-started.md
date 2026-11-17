@@ -71,20 +71,21 @@ You can [construct origin points from administrative boundaries](boundaries.md)
 and [extract roads/ferries from OpenStreetMap](transport.md) directly, or use
 previously prepared and verified shapefiles.
 
-For independently prepared shapefiles, use the expected three filenames, in
-any subdirectories under a single root:
+For independently prepared shapefiles, use these canonical, role-based
+filenames in any subdirectories under a single root. The three historical
+basenames remain accepted for backward compatibility:
 
 ```text
 external-gis-data/
-├── primsectertrunk_road_shp/
-│   ├── primsectertrunk_road.shp
-│   ├── primsectertrunk_road.shx
-│   └── primsectertrunk_road.dbf
-├── ferry_route_shape_shp/
-│   └── ferry_route_shape.shp
-└── muncity_centroids_shp/
-    ├── muncity_centroids.shp
-    └── muncity_centroids.dbf
+├── roads/
+│   ├── roads.shp
+│   ├── roads.shx
+│   └── roads.dbf
+├── ferry_routes/
+│   └── ferry_routes.shp
+└── locality_origins/
+    ├── locality_origins.shp
+    └── locality_origins.dbf
 ```
 
 Input spatial coordinates **must already be WGS84 longitude/latitude**
