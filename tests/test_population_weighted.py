@@ -427,3 +427,117 @@ def test_run_skips_missing_but_retains_unmodeled_town(tmp_path, monkeypatch):
     manifest=json.loads((result/'manifest.json').read_text())
     assert manifest['missing_geometry_barangays']==1
     assert manifest['missing_geometry_population']==900
+
+# Adaptive component-wise k-median selection (v4.3)
+
+def test_adaptive_balanced_selects_multiple_medians_on_connected_town():
+    x=np.arange(12.,dtype=float)
+    D=np.abs(x[:,None]-x[None,:])
+    selected,weights,access,mean,info=pop.select_sites_balanced(
+        D,np.ones(len(x)),np.zeros(len(x)),max_sites=12)
+    assert 1 < len(selected) < len(x)
+    assert sum(weights)==12
+    assert info['n_components']==1
+    assert info['component_site_counts']==[len(selected)]
+    assert 0 < info['selection_score'] < 1
+    assert np.isfinite(access).all()
+    assert mean < pop.select_sites(D,np.ones(len(x)),np.zeros(len(x)))[-1]
+    assert np.isclose(info['selection_score'],
+            info['normalized_road_access']+info['normalized_extra_sites'])
+
+
+def test_adaptive_preserves_disconnected_components_and_site_cap():
+    D=np.array([[0,2,4,np.inf,np.inf],
+                [2,0,2,np.inf,np.inf],
+                [4,2,0,np.inf,np.inf],
+                [np.inf,np.inf,np.inf,0,6],
+                [np.inf,np.inf,np.inf,6,0]],float)
+    p=[10.,20.,30.,40.,50.]
+    one,_,_,_,info_one=pop.select_sites_balanced(D,p,[0]*5,max_sites=2)
+    more,weights,_,_,info=pop.select_sites_balanced(D,p,[0]*5,max_sites=5)
+    assert len(one)==2
+    assert len(more)==3
+    assert info['component_site_counts']==[1,2]
+    assert np.isclose(sum(weights),150)
+    assert info['selection_score']<info_one['selection_score']
+    for node in range(5):
+        assert np.isfinite(D[node,more]).any()
+    with pytest.raises(ValueError,match='disconnected demand components'):
+        pop.select_sites_balanced(D,p,[0]*5,max_sites=1)
+
+
+def test_adaptive_reproducible_independent_of_origin_offsets():
+    n=8
+    D=np.abs(np.arange(n)[:,None]-np.arange(n)[None,:]).astype(float)
+    p=np.array([5.,10.,30.,10.,5.,25.,10.,5.])
+    r1=pop.select_sites_balanced(D,p,np.zeros(n),max_sites=6)
+    r2=pop.select_sites_balanced(D,p,np.linspace(.5,2,n),max_sites=6)
+    assert np.array_equal(r1[0],r2[0])
+    assert np.array_equal(r1[1],r2[1])
+    assert r2[3]>r1[3]
+    for _ in range(3):
+        assert np.array_equal(pop.select_sites_balanced(D,p,np.zeros(n),max_sites=6)[0],r1[0])
+
+
+def test_adaptive_one_per_component_when_no_internal_distance():
+    D=np.array([[0.,np.inf],[np.inf,0.]])
+    chosen,weights,access,err,info=pop.select_sites_balanced(D,[7,13],[0.,0.],max_sites=2)
+    assert chosen.tolist()==[0,1]
+    assert weights.tolist()==[7,13]
+    assert np.all(access==0) and err==0
+    assert info['selection_score']==0
+    assert info['normalized_extra_sites']==0
+
+
+def test_adaptive_uses_same_exact_single_median_with_one_site_cap():
+    coords=np.array([0.,3.,10.,15.])
+    D=np.abs(coords[:,None]-coords[None,:])
+    p=[1,100,1,1]
+    one=pop.select_sites(D,p,[0,0,0,0],max_sites=1)
+    balanced=pop.select_sites_balanced(D,p,[0,0,0,0],max_sites=1)
+    assert np.array_equal(one[0],balanced[0])
+    assert np.array_equal(one[1],balanced[1])
+    assert np.isclose(one[-1],balanced[-2])
+
+
+def test_adaptive_cli_defaults_and_legacy_mode_switch():
+    args=pop.parse_args([])
+    assert args.median_selection=='balanced'
+    assert args.max_mean_access_km is None
+    assert pop.parse_args(['--median-selection','one']).median_selection=='one'
+    assert pop.parse_args(['--max-mean-access-km','10']).max_mean_access_km==10.
+
+
+def test_adaptive_town_checkpoint_and_population_od_preserved(tmp_path,monkeypatch):
+    """The new site selection changes only representatives, not OD aggregation."""
+    from scipy.sparse import coo_matrix
+    # Six road nodes in a line: all residents of the first town are connected.
+    u=np.arange(5); v=u+1; w=np.ones(5)
+    G=coo_matrix((np.r_[w,w],(np.r_[u,v],np.r_[v,u])),shape=(6,6)).tocsr()
+    monkeypatch.setattr(route.mx,'load_core',lambda *a,**k:G,raising=False)
+    core=tmp_path/'core';core.mkdir()
+    np.save(core/'core_index_per_bar.npy',np.arange(6,dtype=np.int32))
+    np.save(core/'original_index_per_bar.npy',np.arange(6,dtype=np.int32))
+    np.save(core/'offset_per_bar.npy',np.zeros(6))
+    np.save(core/'snapped_node_lonlat.npy',np.column_stack((np.arange(6)+120,np.full(6,14))))
+    town='0128010000';other='0128020000'
+    rows=[{'town_psgc':town,'population':10} for _ in range(5)]+[
+         {'town_psgc':other,'population':10}]
+    roster={town:{'geographic_level':'Mun','name':'A'},
+            other:{'geographic_level':'Mun','name':'B'}}
+    selection={'median_selection':'balanced','mode':'balanced',
+               'max_mean_access_km':None,'max_sites_per_town':6}
+    sites=route.build_town_sites(tmp_path,core,'testkey',rows,roster,{'selection':selection})
+    assert len(sites)>2  # auto-k in a town with connected origins
+    assert sum(x['population'] for x in sites)==60
+    again=route.build_town_sites(tmp_path,core,'testkey',rows,roster,{'selection':selection})
+    assert again==sites
+    audit=list((tmp_path/'town_sites'/'testkey').glob('*/selection_audit.csv'))
+    assert len(audit)==1
+    assert 'component_site_counts' in audit[0].read_text()
+    towns,nums,dens,_=route.compute_routing(tmp_path,core,sites,'testkey',workers=1)
+    i,j=[towns.index(x) for x in (town,other)]
+    assert np.isclose(dens[i,j],50*10)
+    assert np.isclose(dens[j,i],50*10)
+    d,r=pop.finish_means(nums,dens,[50,10] if towns==[town,other] else [10,50])
+    assert np.isfinite(d[i,j]) and r[i,j]==1

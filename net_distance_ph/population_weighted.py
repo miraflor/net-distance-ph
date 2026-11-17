@@ -182,6 +182,184 @@ def select_sites(D, pop, offset, *, max_mean_access_km=None, max_sites=12):
     return np.asarray(chosen,dtype=np.int64), weights, access, error
 
 
+
+def _component_curve(D, population, cap):
+    """Deterministic approximate p-median cost curve for a CONNECTED component.
+
+    The one-median is exact among candidate demand nodes; for k>1, greedy
+    augmentation and deterministic 1-swaps search the discrete p-median space.
+    Every returned cost is a population-weighted sum of *network* distances,
+    excluding constant origin-to-road snap offsets.
+    """
+    n = len(population)
+    assert D.shape == (n, n) and np.isfinite(D).all()
+    candidates = np.arange(n, dtype=int)
+    selected = [int(np.argmin(np.asarray(population, float) @ D))]
+    p = np.asarray(population, float)
+
+    def current_cost(locations):
+        return float(p @ np.min(D[:, locations], axis=1))
+
+    def swap_improve(locations):
+        # The objective is evaluated exactly for each proposed replacement.
+        # This does not imply a globally optimal k-median for k>1.
+        locations = list(sorted(locations))
+        for _ in range(3):
+            base_cost = current_cost(locations)
+            best_choice = None
+            for pos in range(len(locations)):
+                remaining = locations[:pos] + locations[pos + 1:]
+                base = (np.min(D[:, remaining], axis=1)
+                        if remaining else np.full(n, np.inf))
+                trial_costs = np.sum(p[:, None] * np.minimum(base[:, None], D), axis=0)
+                trial_costs[locations] = np.inf
+                trial = int(np.argmin(trial_costs))
+                cost = float(trial_costs[trial])
+                if cost < base_cost - 1e-10 * max(1., abs(base_cost)):
+                    if best_choice is None or (cost, pos, trial) < best_choice:
+                        best_choice = (cost, pos, trial)
+            if best_choice is None:
+                break
+            _, pos, trial = best_choice
+            locations[pos] = trial
+            locations.sort()
+        return locations
+
+    curve = []
+    for k in range(1, min(int(cap), n) + 1):
+        if k > 1:
+            old = np.min(D[:, selected], axis=1)
+            scores = np.sum(p[:, None] * np.minimum(old[:, None], D), axis=0)
+            scores[selected] = np.inf
+            nxt = int(np.argmin(scores))
+            if not np.isfinite(scores[nxt]):
+                break
+            selected = swap_improve(selected + [nxt])
+        cost = current_cost(selected)
+        curve.append((tuple(selected), cost))
+        # No benefit is possible beyond exactly zero road access error.
+        if cost <= 1e-10 * max(1., curve[0][1]):
+            break
+    return curve
+
+
+def select_sites_balanced(D, pop, offset, *, max_sites=12):
+    """Choose per-component medoids by a normalized rate-distortion objective.
+
+    Let J(k_c) be the *heuristically minimized* weighted road access sum in
+    component c. Among the enumerated choices with total k <= max_sites,
+    minimize
+
+        sum_c J(k_c)/sum_c J(1)
+        + (sum_c k_c - n_components)/(n_demand - n_components).
+
+    Both ratios run from 0 to 1; the second measures how much of the full
+    demand support is retained beyond the mandatory one-per-component sites.
+    This has no manually tuned distance threshold or penalty coefficient.
+    It is a specified representation tradeoff, NOT a statistical guarantee of
+    optimal k or a global solution to each NP-hard k-median problem.
+    """
+    D = np.asarray(D, dtype=float)
+    p = np.asarray(pop, dtype=float)
+    off = np.asarray(offset, dtype=float)
+    n = len(p)
+    if not n or D.shape != (n, n) or off.shape != (n,):
+        raise ValueError('Invalid distance/population/offset shapes')
+    if (not np.isfinite(p).all() or (p <= 0).any()
+            or not np.isfinite(off).all() or (off < 0).any()):
+        raise ValueError('Population and origin offsets must be finite and nonnegative')
+    if np.isnan(D).any() or np.isneginf(D).any():
+        raise ValueError('Road distance matrix contains NaN or -infinity')
+    if not np.isfinite(np.diag(D)).all() or (D[np.isfinite(D)] < 0).any():
+        raise ValueError('Road distances must be nonnegative with finite diagonals')
+    if not np.array_equal(np.isfinite(D), np.isfinite(D.T)):
+        raise ValueError('Asymmetric road reachability')
+    if max_sites < 1:
+        raise ValueError('max_sites must be positive')
+
+    remaining = set(range(n))
+    components = []
+    while remaining:
+        root = min(remaining)
+        ids = np.flatnonzero(np.isfinite(D[root]))
+        if not set(ids).issubset(remaining):
+            raise ValueError('Inconsistent disconnected components')
+        if not np.isfinite(D[np.ix_(ids, ids)]).all():
+            raise ValueError('Non-transitive component reachability')
+        remaining.difference_update(map(int, ids))
+        components.append(ids)
+    if len(components) > max_sites:
+        raise ValueError(f'{len(components)} disconnected demand components require '
+                         f'more than --max-sites-per-town={max_sites}')
+
+    curves = []
+    for ids in components:
+        local = _component_curve(D[np.ix_(ids, ids)], p[ids], max_sites)
+        curves.append([(tuple(int(ids[i]) for i in choice), cost)
+                       for choice, cost in local])
+    base = float(sum(curve[0][1] for curve in curves))
+    n_extra = n - len(components)
+
+    # Dynamic programming: for each total site count, use the minimum
+    # *un-normalized* weighted access cost across all component allocations.
+    # This also handles the global (per-town) max_sites cap correctly.
+    frontier = {0: (0., ())}
+    for curve in curves:
+        next_frontier = {}
+        for prev_k, (prev_cost, prev_choice) in frontier.items():
+            for chosen, cost in curve:
+                n_sites = prev_k + len(chosen)
+                if n_sites > max_sites:
+                    continue
+                trial = (prev_cost + cost, prev_choice + chosen)
+                old = next_frontier.get(n_sites)
+                if (old is None or trial[0] < old[0] - 1e-10 * max(1., old[0])
+                        or (abs(trial[0] - old[0]) <= 1e-10 * max(1., old[0])
+                            and trial[1] < old[1])):
+                    next_frontier[n_sites] = trial
+        frontier = next_frontier
+        if not frontier:
+            raise ValueError('No feasible representative allocation within max_sites')
+
+    def score(k, cost):
+        loss = cost / base if base > 0 else 0.
+        complexity = ((k - len(components)) / n_extra) if n_extra else 0.
+        return (loss + complexity, k)
+
+    best_k = min(frontier, key=lambda k: score(k, frontier[k][0]))
+    road_cost, chosen = frontier[best_k]
+    chosen = np.asarray(sorted(chosen), dtype=np.int64)
+    # Keep the same population-assignment semantics as the previous model.
+    all_dist = D[:, chosen]
+    nearest = np.argmin(all_dist, axis=1)
+    access_dist = all_dist[np.arange(n), nearest]
+    if not np.isfinite(access_dist).all():
+        raise ValueError('A population demand node was left without a reachable median')
+    weights = np.bincount(nearest, weights=p, minlength=best_k)
+    means = np.bincount(nearest, weights=p * (access_dist + off),
+                        minlength=best_k) / weights
+    total_mean = float(p @ (access_dist + off) / p.sum())
+    score_value, _ = score(best_k, road_cost)
+    diagnostics = {
+        'criterion': 'balanced-normalized-rate-distortion/v1',
+        'n_components': len(components),
+        'n_demand_nodes': n,
+        'n_sites': best_k,
+        'road_access_baseline_km_per_person': float(base / p.sum()),
+        'road_access_selected_km_per_person': float(road_cost / p.sum()),
+        'normalized_road_access': float(road_cost / base) if base > 0 else 0.,
+        'normalized_extra_sites': float((best_k - len(components)) / n_extra) if n_extra else 0.,
+        'selection_score': float(score_value),
+        'component_site_counts': [int(np.isin(chosen,c).sum()) for c in components],
+        'evaluated_site_counts': [
+            {'k': int(k),
+             'road_access_relative': float(cost / base) if base > 0 else 0.,
+             'complexity_fraction': float((k - len(components)) / n_extra) if n_extra else 0.,
+             'score': float(score(k,cost)[0])}
+            for k, (cost,_) in sorted(frontier.items())],
+    }
+    return chosen, weights, means, total_mean, diagnostics
+
 def combine_group_matrices(town_num,town_den, mapping, n_groups):
     """Aggregate *unnormalized* population-pair totals (never mean of means)."""
     from scipy.sparse import csr_matrix
@@ -226,8 +404,10 @@ def add_run_arguments(p):
     p.add_argument("--dataset-dir", type=Path, help="folder with units.csv and barangay_population.csv (default: bundled normalized tables)")
     p.add_argument("--points", type=Path, help="optional barangay points.csv with psgc_code,lon,lat; otherwise auto-discover/download pinned GIS geometry")
     p.add_argument("--level", choices=("town", "province", "region", "all"), default="all")
+    p.add_argument("--median-selection", choices=("balanced", "one"), default="balanced",
+                   help="balanced: automatic component-wise k via normalized access/complexity tradeoff (default); one: legacy 1-median per component")
     p.add_argument("--max-mean-access-km", type=float, default=None,
-                   help="optional max mean population access distance (km); omitted: one median per connected component")
+                   help="optional explicit mean-access budget (km); overrides balanced selection and uses legacy budgeted k-median")
     p.add_argument("--max-sites-per-town", type=int, default=12)
     p.add_argument("--max-snap-km", type=float, default=25.0)
     p.add_argument("--geometry-source", choices=("auto","ocha","faeldon"), default="ocha",

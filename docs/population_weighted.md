@@ -22,7 +22,7 @@ The original default behavior stopped whenever one of 41,998 positive-population
 
 ## Distances
 
-Medoids minimize population-weighted shortest-path access within each connected component of each town. Default `k=1` per populated component; an optional access budget causes deterministic greedy + 1-swap selection up to `--max-sites-per-town`. Province and region outputs aggregate population-pair totals from town sites; the population weights always originate in barangay records. Distances are *conditional means among reachable represented site pairs*, and within-unit diagonals need not be zero. Representation-error bounds refer to the **modeled, snapped origin population**, not to missing origin locations or the accuracy of the underlying OSM topology.
+Medoids minimize population-weighted shortest-path access within each populated connected component of each town. **The default is now automatic component-wise k-selection**, chosen by a transparent balanced normalized rate–distortion rule. To reproduce the previous release use `--median-selection one`, which selects exactly one weighted network 1-median per populated connected component. An explicit `--max-mean-access-km` invokes the prior deterministic greedy + 1-swap access-budget method (cannot combine with `--median-selection one`). The total per-town cap remains `--max-sites-per-town` (default 12), not 12 per component. Province and region outputs aggregate population-pair totals from town sites; the population weights always originate in barangay records. Distances are *conditional means among reachable represented site pairs*, and within-unit diagonals need not be zero. Representation-error bounds refer to the **modeled, snapped origin population**, not to missing origin locations or the accuracy of the underlying OSM topology.
 
 The route core preserves all valid barangay terminal nodes separately from the baseline centroid core. A sampled verifier compares site distances to the original, unreduced graph. OSM graph connectivity and origin geography are scientifically independent sources of uncertainty.
 
@@ -50,3 +50,57 @@ Only a complete absence of any usable positive-population origin is fatal.
 `--missing-geometry-policy error` restores the completeness requirement.
 OCHA download errors and malformed datasets are still errors, not "missing
 coverage"; there is no automatic faeldon fallback.
+
+
+## Adaptive component-wise k-median selection (v4.3)
+
+Default `--median-selection balanced` selects **k separately for every populated
+connected component**, while enforcing a **single maximum count per town**.
+For each component `c`, `J_c(k)` is the population-weighted total shortest-path
+access to its nearest `k` medoids, among candidate snapped barangay nodes. The
+exact one-median starts each component's cost curve. Larger `k` use deterministic
+greedy augmentation and 1-swap refinement; these are **heuristics** for the
+NP-hard discrete k-median optimization, not exact global solvers.
+
+The automatic policy minimizes across evaluated site allocations:
+
+    score = [sum_c J_c(k_c) / sum_c J_c(1)]
+          + [sum_c (k_c - 1) / sum_c (n_c - 1)]
+
+where `n_c` is the number of distinct positive-population snapped demand nodes
+in that component. The first fraction measures *remaining road-access
+representation distortion* relative to the one-median baseline. The second
+fraction measures *additional representative sites* as a fraction of all
+optional demand nodes. In degenerate cases (no extra demand nodes or zero
+baseline distortion), the smallest feasible k is selected. Both terms are
+normalized, so there is **no user-supplied penalty or kilometer threshold**.
+Equal importance of these two ratios is an explicit modeling assumption;
+this criterion yields an optimal k **for this specified tradeoff and the
+computed heuristic cost curves**, not a universally optimal statistical k.
+
+Population assignment to chosen sites, the town-to-town conditional
+population-weighted mean of reachable representative shortest paths, reachability
+probabilities and **all population denominators remain unchanged**. The policy
+adds no geographic links or origin points. It is *not* the minimum site-to-site
+distance and is not the exact expected distance between individual residents.
+
+A fresh selection-specific checkpoint is written under
+`variants/population_weighted/town_sites/<core-key>/<selection-key>/`, including
+`selection_audit.csv` (town, demand-node count, components, medians, component
+allocations, mean access, and score) and `selection_policy.json`. This makes
+choices reproducible and prevents mixing old one-median selection checkpoints
+with adaptive selection. Existing national graphs, barangay cores, and earlier
+published output matrices remain intact. New representative-site sets use a
+new routing fingerprint; the existing routing checkpoint may be reused *only*
+when the exact representative sites and weights are identical.
+
+**Commands:**
+
+    net-distance-ph population-weighted --geometry-source faeldon
+    net-distance-ph population-weighted --geometry-source faeldon --median-selection one
+    net-distance-ph population-weighted --geometry-source faeldon --max-mean-access-km 10
+
+Use the second command to reproduce the old default, and the third to apply a
+*user-specified* kilometer error budget rather than automatic rate–distortion
+selection. These are scientifically distinct modeling choices and should be
+compared rather than conflated.

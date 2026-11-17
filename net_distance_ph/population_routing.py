@@ -22,7 +22,7 @@ from . import graphbuild as gb
 from . import matrix as mx
 from . import reduce as rd
 from .population_weighted import (SCHEMA, digest, write_json, read_points, validate_join,
-    select_sites, combine_group_matrices, finish_means, save_csv_matrix, filter_origin_rows)
+    select_sites, select_sites_balanced, combine_group_matrices, finish_means, save_csv_matrix, filter_origin_rows)
 from .population_data import load_plain_dataset, export_bundled_defaults
 
 
@@ -236,6 +236,8 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
     cache_dir.mkdir(parents=True,exist_ok=True)
     solver=TargetDijkstra(G)
     all_sites=[]
+    audit=[]
+    selection_mode=params["selection"].get("mode", "one")
     for ni,town in enumerate(codes,1):
         ids=bytown.get(town,[])
         if not ids:
@@ -243,6 +245,11 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
             # town in output with zero modeled reachability and full census
             # population. Never synthesize a road connection.
             print(f"SNAP COVERAGE WARNING: no modeled origins in town {town}",flush=True)
+            if "median_selection" in params["selection"]:
+                audit.append({"town_psgc":town,"town_name":roster[town]["name"],
+                              "mode":selection_mode,"n_demand_nodes":0,
+                              "n_components":0,"n_sites":0,"mean_access_km":"",
+                              "selection_score":"","component_site_counts":"{}"})
             continue
         cache=cache_dir/(town+".json")
         if cache.is_file():
@@ -250,6 +257,16 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
             if obj.get("schema")!=SCHEMA or obj.get("settings")!=params["selection"]:
                 raise ValueError(f"Town site cache has mismatched settings: {cache}")
             all_sites.extend(obj["sites"])
+            if "median_selection" in params["selection"]:
+                diagnostic=obj.get("selection_diagnostics")
+                if diagnostic is None:
+                    raise ValueError(f"Median selection audit missing from checkpoint: {cache}")
+                audit.append({"town_psgc":town,"town_name":roster[town]["name"],
+                              "mode":selection_mode,"n_demand_nodes":obj["n_demand_nodes"],
+                              "n_components":diagnostic["n_components"],"n_sites":len(obj["sites"]),
+                              "mean_access_km":obj["mean_access_km"],
+                              "selection_score":diagnostic.get("selection_score", ""),
+                              "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True)})
             continue
         # Multiple barangay representatives may snap to one road vertex.
         # Aggregate their populations, *without* discarding their snap offsets.
@@ -278,9 +295,21 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
         if not np.array_equal(finite,finite.T):raise ValueError(f"Town {town} reachability asymmetry")
         if finite.any() and np.max(np.abs(distances[finite]-distances.T[finite]))>1e-7:
             raise ValueError(f"Town {town} local distance asymmetry")
-        chosen,weights,access,overall=select_sites(distances,pops,stubs,
-            max_mean_access_km=params["selection"]["max_mean_access_km"],
-            max_sites=params["selection"]["max_sites_per_town"])
+        if selection_mode=="balanced":
+            chosen,weights,access,overall,diagnostic=select_sites_balanced(
+                distances,pops,stubs,max_sites=params["selection"]["max_sites_per_town"])
+        elif selection_mode in ("one","budget"):
+            chosen,weights,access,overall=select_sites(distances,pops,stubs,
+                max_mean_access_km=params["selection"]["max_mean_access_km"],
+                max_sites=params["selection"]["max_sites_per_town"])
+            diagnostic={"criterion":selection_mode,"n_components":len(np.unique(comps)),
+                        "n_demand_nodes":len(nodes),"n_sites":len(chosen),
+                        "component_site_counts":[int(np.isin(chosen,np.flatnonzero(comps==c)).sum())
+                                                 for c in np.unique(comps)]}
+        else:
+            raise ValueError(f"Unknown median selection mode {selection_mode!r}")
+        diagnostic["component_site_counts_by_graph_component"]={
+            str(int(c)):int(np.count_nonzero(comps[chosen]==c)) for c in np.unique(comps)}
         sites=[]
         for j, ix in enumerate(chosen):
             d=demand[ix]
@@ -292,10 +321,25 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
         assert sum(x["population"] for x in sites)==int(pops.sum())
         write_json(cache,{"schema":SCHEMA,"settings":params["selection"],
                           "population":int(pops.sum()),"mean_access_km":overall,
-                          "n_demand_nodes":len(nodes),"sites":sites})
+                          "n_demand_nodes":len(nodes),"selection_diagnostics":diagnostic,
+                          "sites":sites})
         all_sites.extend(sites)
+        if "median_selection" in params["selection"]:
+            audit.append({"town_psgc":town,"town_name":roster[town]["name"],
+                          "mode":selection_mode,"n_demand_nodes":len(nodes),
+                          "n_components":diagnostic["n_components"],"n_sites":len(sites),
+                          "mean_access_km":overall,
+                          "selection_score":diagnostic.get("selection_score", ""),
+                          "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True)})
         if ni%100==0 or ni==len(codes):
             print(f"Selected weighted network representatives: {ni:,}/{len(codes):,} towns; sites so far {len(all_sites):,}",flush=True)
+    if "median_selection" in params["selection"]:
+        from .population_data import _write_csv
+        _write_csv(cache_dir/"selection_audit.csv",
+                   ("town_psgc","town_name","mode","n_demand_nodes","n_components",
+                    "n_sites","mean_access_km","selection_score","component_site_counts"),audit)
+        print(f"MEDIAN SELECTION: {selection_mode}; {len(all_sites):,} sites; "
+              f"audit {cache_dir/'selection_audit.csv'}",flush=True)
     return all_sites
 
 
@@ -584,7 +628,15 @@ def run(args):
     pop_meta={**pop_meta,"missing_geometry_audit_csv":str(geometry_audit),
               "missing_geometry_barangays":len(missing_geometry),
               "missing_geometry_population":missing_pop}
-    selection={"max_mean_access_km":args.max_mean_access_km,"max_sites_per_town":args.max_sites_per_town}
+    if args.max_mean_access_km is not None and getattr(args,"median_selection","balanced")=="one":
+        raise ValueError("--median-selection one conflicts with --max-mean-access-km; "
+                         "omit one to use budgeted k-median selection")
+    selection_mode=("budget" if args.max_mean_access_km is not None
+                    else getattr(args,"median_selection","one"))
+    selection={"max_mean_access_km":args.max_mean_access_km,
+               "max_sites_per_town":args.max_sites_per_town,
+               "median_selection":getattr(args,"median_selection","one"),
+               "mode":selection_mode}
     if args.max_snap_km<=0 or not np.isfinite(args.max_snap_km):
         raise ValueError("--max-snap-km must be finite positive")
     params={"max_snap_km":args.max_snap_km,"positions":coordinates,"selection":selection,
@@ -598,6 +650,17 @@ def run(args):
          workers=getattr(args,"workers",2),all_towns=all_towns)
     output_run=home/"output"/route_hash[:16]
     output_run.mkdir(parents=True,exist_ok=True)
+    selection_cache_hash=hashlib.sha256(json.dumps(selection,sort_keys=True).encode()).hexdigest()[:16]
+    selection_audit=home/"town_sites"/key/selection_cache_hash/"selection_audit.csv"
+    write_json(home/"town_sites"/key/selection_cache_hash/"selection_policy.json",
+        {"median_selection":selection_mode,"max_sites_per_town":args.max_sites_per_town,
+         "max_mean_access_km":args.max_mean_access_km,
+         "automatic_objective":(
+             "weighted within-component road access divided by one-median baseline "
+             "+ fraction of optional demand-node representatives retained; "
+             "approximately optimized by greedy additions and 1-swaps"
+             if selection_mode=="balanced" else None),
+         "selection_audit_csv":str(selection_audit)})
     sites_path=output_run/"representative_sites.csv"
     with sites_path.open("w",newline="",encoding="utf-8") as fd:
         fields=["town_psgc","core_node","original_node","lon","lat","population","mean_access_km","component"]
@@ -636,6 +699,7 @@ def run(args):
                     full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
     write_json(home/"output"/"latest_run.json",{"schema":SCHEMA,"routing_hash":route_hash,
         "directory":str(output_run),"levels": ["town","province","region"] if args.level=="all" else [args.level],
+        "median_selection":selection_mode,"selection_audit_csv":str(selection_audit),
         "verification_file":str(output_run/"independent_original_graph_verification.json")})
     print("COMPLETE: baseline centroid matrix, selected graph releases and original raw datasets unchanged")
     return 0
