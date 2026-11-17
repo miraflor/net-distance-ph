@@ -49,9 +49,11 @@ class _TimestampStream:
         with self._lock:
             for chunk in normalized.splitlines(keepends=True):
                 if self._start:
-                    prefix = f"[{datetime.now().astimezone().isoformat(timespec='seconds')}] [{self._label}] "
-                    self._stream.write(prefix)
-                    self._logfile.write(prefix)
+                    # Console: short local clock; archive: local date and time.
+                    # Neither stores timezone, UTC offset, or a synthetic severity.
+                    when = datetime.now()
+                    self._stream.write(f"[{when:%H:%M:%S}] ")
+                    self._logfile.write(f"[{when:%Y-%m-%d %H:%M:%S}] ")
                 self._stream.write(chunk)
                 self._logfile.write(chunk)
                 self._start = chunk.endswith("\n")

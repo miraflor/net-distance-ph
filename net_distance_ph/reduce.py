@@ -14,7 +14,6 @@ pass; it never resumes from a half-mutated graph.
 
 from __future__ import annotations
 
-from datetime import datetime
 import threading
 import time
 from typing import Callable
@@ -27,10 +26,6 @@ CheckpointFn = Callable[[dict], None]
 
 def _default_progress(message: str) -> None:
     print(message, flush=True)
-
-
-def _stamp() -> str:
-    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
 
 
 class _Heartbeat:
@@ -61,8 +56,7 @@ class _Heartbeat:
         while not self.stop_event.wait(self.interval):
             elapsed = time.monotonic() - self.started
             self.progress(
-                f"    [{_stamp()}] {self.label}, pass {self.pass_no}: "
-                f"still working ({elapsed:,.0f}s elapsed)"
+                f"  {self.label} | pass {self.pass_no} still running ({elapsed:,.0f}s)"
             )
 
     def __exit__(self, exc_type, exc, tb):
@@ -266,11 +260,11 @@ def reduce_to_core(
     if verbose:
         if start_phase or start_pass or completed_passes:
             emit(
-                f"  [{_stamp()}] resuming reduction at phase {start_phase + 1}/"
+                f"  resuming reduction at phase {start_phase + 1}/"
                 f"{len(schedule)}, after {completed_passes:,} completed passes"
             )
         emit(
-            f"  [{_stamp()}] reduction state: {current_nodes:,} live nodes, "
+            f"  reduction state: {current_nodes:,} live nodes, "
             f"{u.size:,} edges; original {initial_nodes:,} nodes, {initial_edges:,} edges"
         )
 
@@ -292,10 +286,9 @@ def reduce_to_core(
             if verbose:
                 removed_pct = 100.0 * (initial_nodes - before_nodes) / max(initial_nodes, 1)
                 emit(
-                    f"    [{_stamp()}] phase {phase_index + 1}/{len(schedule)} "
-                    f"{label}, pass {pass_no}: START; "
-                    f"{before_nodes:,} nodes, {before_edges:,} edges, "
-                    f"{removed_pct:.1f}% of original nodes removed"
+                    f"  phase {phase_index + 1}/{len(schedule)} {label} | "
+                    f"pass {pass_no} START | {before_nodes:,} nodes, "
+                    f"{before_edges:,} edges | {removed_pct:.1f}% removed"
                 )
 
             with _Heartbeat(emit, label, pass_no, heartbeat_seconds if verbose else 0):
@@ -322,15 +315,14 @@ def reduce_to_core(
                 delta_edges = int(u.size) - before_edges
                 total_seconds = time.monotonic() - reduction_started
                 emit(
-                    f"    [{_stamp()}] phase {phase_index + 1}/{len(schedule)} "
-                    f"{label}, pass {pass_no}: DONE in {pass_seconds:,.1f}s; "
-                    f"removed {removed:,} nodes; now {after_nodes:,} nodes, "
-                    f"{u.size:,} edges ({delta_edges:+,}); "
-                    f"reduction-session elapsed {total_seconds:,.1f}s"
+                    f"  phase {phase_index + 1}/{len(schedule)} {label} | "
+                    f"pass {pass_no} DONE {pass_seconds:.1f}s | "
+                    f"-{removed:,} nodes; {after_nodes:,} left; "
+                    f"{u.size:,} edges ({delta_edges:+,})"
                 )
                 if growth_cap_hit:
                     emit(
-                        f"    [{_stamp()}] {label}: edge-growth cap hit "
+                        f"    {label}: edge-growth cap hit "
                         f"({u.size:,} > {best_edges:,} × {max_edge_growth}); advancing"
                     )
 
@@ -354,7 +346,7 @@ def reduce_to_core(
             if phase_done:
                 if verbose:
                     emit(
-                        f"    [{_stamp()}] after {label}: "
+                        f"    after {label}: "
                         f"{int(alive.sum()):,} nodes, {u.size:,} edges"
                     )
                 break
@@ -362,7 +354,7 @@ def reduce_to_core(
     if verbose:
         n1 = int(alive.sum())
         emit(
-            f"  [{_stamp()}] reduction done: {initial_nodes:,} -> {n1:,} nodes "
+            f"  reduction done: {initial_nodes:,} -> {n1:,} nodes "
             f"({100 * n1 / max(initial_nodes, 1):.1f}%), "
             f"{initial_edges:,} -> {u.size:,} edges "
             f"({100 * u.size / max(initial_edges, 1):.1f}%)"

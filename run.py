@@ -258,10 +258,6 @@ def _require_core_current(cs):
         )
 
 
-def _stamp():
-    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
-
-
 def _atomic_savez(path, **arrays):
     """Write a NumPy archive and atomically replace the previous checkpoint."""
     path = Path(path)
@@ -330,7 +326,7 @@ def _make_reduce_logger(log_path):
         with lock:
             print(message, flush=True)
             with open(log_path, "a", encoding="utf-8") as fh:
-                fh.write(message + "\n")
+                fh.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}\n")
                 fh.flush()
     return log
 
@@ -426,7 +422,7 @@ def stage_reduce(args):
     log = _make_reduce_logger(log_path)
 
     log("")
-    log(f"[2/4] reducing to a core graph — session started {_stamp()}")
+    log("[2/4] reducing to a core graph")
     log(f"  progress log: {log_path}")
     log(
         f"  heartbeat every {C.REDUCE_HEARTBEAT_SECONDS:g}s; "
@@ -471,7 +467,7 @@ def stage_reduce(args):
                     resume = True
                     checkpoint_nodes = int(alive.sum()) if alive.size else n_nodes
                     log(
-                        f"  [{_stamp()}] valid checkpoint found: "
+                        f"  valid checkpoint found: "
                         f"{checkpoint_nodes:,} live nodes, {u.size:,} edges, "
                         f"{completed_passes:,} completed passes"
                     )
@@ -483,18 +479,18 @@ def stage_reduce(args):
         if not resume:
             u, v, w = g["u"].copy(), g["v"].copy(), g["w"].copy()
             n_nodes = n_nodes_original
-            log(f"  [{_stamp()}] de-duplicating {u.size:,} raw edges...")
+            log(f"  de-duplicating {u.size:,} raw edges...")
             op = time.time()
             u, v, w = rd.dedupe_edges(u, v, w, n_nodes)
-            log(f"  [{_stamp()}] de-duplication done: {u.size:,} edges in {time.time() - op:.1f}s")
+            log(f"  de-duplication done: {u.size:,} edges in {time.time() - op:.1f}s")
 
-            log(f"  [{_stamp()}] dropping components that contain no snapped town...")
+            log(f"  dropping components that contain no snapped town...")
             op = time.time()
             u, v, w, n_nodes, src = mx.drop_unreachable(
                 u, v, w, n_nodes, src_orig, verbose=True
             )
             log(
-                f"  [{_stamp()}] component filtering done: {n_nodes:,} nodes, "
+                f"  component filtering done: {n_nodes:,} nodes, "
                 f"{u.size:,} edges in {time.time() - op:.1f}s"
             )
             alive = np.empty(0, dtype=bool)
@@ -518,7 +514,7 @@ def stage_reduce(args):
                 completed_passes=np.int64(0),
                 initial_nodes=np.int64(-1), initial_edges=np.int64(-1),
             )
-            log(f"  [{_stamp()}] initial stage-2 checkpoint written")
+            log(f"  initial stage-2 checkpoint written")
 
     checkpoint_counter = 0
 
@@ -531,7 +527,7 @@ def stage_reduce(args):
             return
         started = time.time()
         log(
-            f"    [{_stamp()}] saving atomic stage-2 checkpoint "
+            f"    saving atomic stage-2 checkpoint "
             f"after pass {state['completed_passes']:,}..."
         )
         _atomic_savez(
@@ -547,7 +543,7 @@ def stage_reduce(args):
             initial_nodes=np.int64(state["initial_nodes"]),
             initial_edges=np.int64(state["initial_edges"]),
         )
-        log(f"    [{_stamp()}] checkpoint saved in {time.time() - started:.1f}s")
+        log(f"    checkpoint saved in {time.time() - started:.1f}s")
 
     u, v, w, alive = rd.reduce_to_core(
         u, v, w, n_nodes, src,
@@ -565,18 +561,18 @@ def stage_reduce(args):
         progress=log,
     )
 
-    log(f"  [{_stamp()}] compacting surviving node IDs...")
+    log(f"  compacting surviving node IDs...")
     op = time.time()
     cu, cv, cw, cn, csrc = rd.compact(u, v, w, alive, src)
-    log(f"  [{_stamp()}] compaction done: {cn:,} nodes, {cu.size:,} edges in {time.time() - op:.1f}s")
+    log(f"  compaction done: {cn:,} nodes, {cu.size:,} edges in {time.time() - op:.1f}s")
 
     if C.RCM_REORDER:
-        log(f"  [{_stamp()}] applying reverse Cuthill-McKee reordering...")
+        log(f"  applying reverse Cuthill-McKee reordering...")
         op = time.time()
         cu, cv, cw, csrc = mx.rcm_reorder(cu, cv, cw, cn, csrc)
-        log(f"  [{_stamp()}] RCM reordering done in {time.time() - op:.1f}s")
+        log(f"  RCM reordering done in {time.time() - op:.1f}s")
 
-    log(f"  [{_stamp()}] writing core CSR arrays...")
+    log(f"  writing core CSR arrays...")
     op = time.time()
     mx.save_core(mx.build_csr(cu, cv, cw, cn), C.WORK)
     # lineage_*: which stage-1 files this core was built from; checked by the
@@ -586,7 +582,7 @@ def stage_reduce(args):
         src_nodes=csrc, inv=inv, snapped=snapped, src_lonlat=src_lonlat,
         **{f"lineage_{key}": np.int64(signature[key]) for key in _stage1_signature()},
     )
-    log(f"  [{_stamp()}] core files written in {time.time() - op:.1f}s")
+    log(f"  core files written in {time.time() - op:.1f}s")
 
     checkpoint_path.unlink(missing_ok=True)
     log("  stage-2 checkpoint removed because the stage completed successfully")
