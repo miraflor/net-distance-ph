@@ -418,6 +418,8 @@ def add_run_arguments(p):
                    help="audit and skip unmatched barangay geometry (default), or require complete matching")
     p.add_argument("--verify-sites", type=int, default=5)
     p.add_argument("--workers", type=int, default=2)
+    p.add_argument("--heartbeat-seconds", type=float, default=30.0,
+                   help="seconds between elapsed-time liveness messages (default: 30)")
     p.add_argument("--allow-missing-population", action="store_true",
                    help="explicitly allow partial population coverage; missing barangays are excluded")
     p.add_argument("--province-crosswalk", type=Path,
@@ -432,9 +434,24 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+# Population-weighted logging instrumentation (v44)
 def run_options(args):
-    from .population_routing import run
-    return run(args)
+    from .population_routing import run, _PW_HEARTBEAT_SECONDS
+    from .workspace import run_log, timed_step
+    import math
+
+    # Logging is deliberately outside the main compute path; even validation
+    # failures are captured in a uniquely timestamped run log.
+    with run_log(args.workspace):
+        heartbeat = float(getattr(args, "heartbeat_seconds", 30.0))
+        if not math.isfinite(heartbeat) or heartbeat <= 0:
+            raise ValueError("--heartbeat-seconds must be finite and positive")
+        token = _PW_HEARTBEAT_SECONDS.set(heartbeat)
+        try:
+            with timed_step("population-weighted (total)", heartbeat):
+                return run(args)
+        finally:
+            _PW_HEARTBEAT_SECONDS.reset(token)
 
 
 def main(argv=None):

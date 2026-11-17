@@ -26,6 +26,32 @@ from .population_weighted import (SCHEMA, digest, write_json, read_points, valid
 from .population_data import load_plain_dataset, export_bundled_defaults
 
 
+# Population-weighted logging instrumentation (v44)
+from contextvars import ContextVar as _PwContextVar
+from functools import wraps as _pw_wraps
+from .workspace import timed_step as _pw_timed_step
+
+_PW_HEARTBEAT_SECONDS = _PwContextVar("pw_heartbeat_seconds", default=30.0)
+
+
+def _pw_time_call(label, function, *args, **kwargs):
+    """Time a single operation without modifying its arguments or return value."""
+    with _pw_timed_step(label, _PW_HEARTBEAT_SECONDS.get()):
+        return function(*args, **kwargs)
+
+
+def _pw_timed_phase(label):
+    """Time an entire computation, including failures and cached returns."""
+    def decorate(function):
+        @_pw_wraps(function)
+        def timed(*args, **kwargs):
+            step = label(*args, **kwargs) if callable(label) else label
+            with _pw_timed_step(step, _PW_HEARTBEAT_SECONDS.get()):
+                return function(*args, **kwargs)
+        return timed
+    return decorate
+
+
 @njit(cache=True)
 def _shortest_to_targets(ptr, nei, weights, source, targets,
                          dist, dist_epoch, target_epoch, target_slot,
@@ -117,6 +143,7 @@ class TargetDijkstra:
             self.tseen,self.tslot,self.heap_node,self.heap_dist,self.epoch)
 
 
+@_pw_timed_phase("barangay terminal core (build/reuse)")
 def points_core(workspace, home, prepared, pop_meta, points_path, params):
     """Create/reuse a *different* core protecting all positive-population points."""
     national_graph=workspace / "work" / "graph_full.npz"
@@ -217,6 +244,7 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
         raise
 
 
+@_pw_timed_phase("adaptive k-medians selection")
 def build_town_sites(home, core_dir, key, rows, roster, params):
     """Town-sized exact local network D matrices; checkpoint selected sites per town."""
     G=mx.load_core(core_dir,mmap=True)
@@ -367,6 +395,7 @@ def _routing_task(item):
     return i,numer,reach
 
 
+@_pw_timed_phase("OD routing")
 def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
     """Per-unique-source memoization, streaming to memmaps; crash-recoverable."""
     import multiprocessing as mp
@@ -411,6 +440,7 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
         temp=donepath.with_name("finished_sources.tmp.npy")
         np.save(temp,done)
         os.replace(temp,donepath)
+    routing_progress_started = time.monotonic()
     if todo:
         workers=max(1,int(workers))
         proc=None
@@ -429,7 +459,7 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
                 if count%16==0 or count==len(todo):
                     persist()
                 if count%max(1,len(todo)//10)==0 or count==len(todo):
-                    print(f"  routing progress {count:,}/{len(todo):,} new source nodes",flush=True)
+                    print(f"  routing progress {count:,}/{len(todo):,} new source nodes; elapsed {time.monotonic() - routing_progress_started:.1f}s",flush=True)
             if proc is not None:
                 proc.close();proc.join();proc=None
         except BaseException:
@@ -450,6 +480,7 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
     return towns,A,B,route_hash
 
 
+@_pw_timed_phase(lambda *a, **kw: f"matrix export: {a[1] if len(a) > 1 else kw.get('level', 'unknown')}")
 def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,sites,
                 extra, *, route_hash, core_key, full_town_pop=None, snap_audit=None, town_codes=None):
     from .population_weighted import finish_means, combine_group_matrices, save_csv_matrix
@@ -521,6 +552,7 @@ def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,site
     return target
 
 
+@_pw_timed_phase("independent network verification")
 def verify_original_graph(workspace, core_dir, sites, n_checked):
     """Independent global shortest-path fidelity check against original graph."""
     if n_checked<=0:return {"checked":0,"warning":"Independent original-graph verification disabled by user"}
@@ -586,7 +618,7 @@ def run(args):
         if not (dataset_dir/"units.csv").is_file() or not (dataset_dir/"barangay_population.csv").is_file():
             print("Preparing normalized default CSV tables once...",flush=True)
             export_bundled_defaults(repo,dataset_dir)
-    roster,rows,pop_meta=load_plain_dataset(dataset_dir,
+    roster,rows,pop_meta=_pw_time_call("load population dataset", load_plain_dataset, dataset_dir,
         allow_missing_population=getattr(args,"allow_missing_population",False))
     print(f"DATASET: {len(roster):,} administrative units; {len(rows):,} positive-population barangays; "
           f"population {pop_meta['population_total']:,}",flush=True)
@@ -601,12 +633,12 @@ def run(args):
         pop_meta={**pop_meta,"province_crosswalk_sha256":crosswalk_sha}
         print(f"Validated geographic province crosswalk for {len(crosswalk)} towns",flush=True)
     from .population_geometry import discover_points
-    points_path=discover_points(workspace,dataset_dir,roster,
+    points_path=_pw_time_call("discover barangay geometry", discover_points, workspace,dataset_dir,roster,
         requested=args.points,auto_geometry=not getattr(args,"no_auto_geometry",False),
         source=getattr(args,"geometry_source","ocha"))
-    points=read_points(points_path)
+    points=_pw_time_call("read barangay geometry", read_points, points_path)
     full_population_rows=rows
-    rows,coordinates,missing_geometry=filter_origin_rows(
+    rows,coordinates,missing_geometry=_pw_time_call("validate geometry coverage", filter_origin_rows,
         full_population_rows,points,
         on_missing=getattr(args,"missing_geometry_policy","exclude"))
     missing_pop=sum(int(r["population"]) for r in missing_geometry)
