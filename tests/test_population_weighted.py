@@ -423,7 +423,6 @@ def test_run_skips_missing_but_retains_unmodeled_town(tmp_path, monkeypatch):
     assert np.load(result/'reachable_pair_probability.npy')[1,0]==0
     audit=list((ws/'variants/population_weighted/geometry').glob('missing_origins_*.csv'))
     assert len(audit)==1 and bar_b in audit[0].read_text()
-    import json
     manifest=json.loads((result/'manifest.json').read_text())
     assert manifest['missing_geometry_barangays']==1
     assert manifest['missing_geometry_population']==900
