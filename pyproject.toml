@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "net-distance-ph contributors" }]
-dependencies = ["numpy>=1.24,<3", "scipy>=1.11,<2"]
+dependencies = ["numpy>=1.24,<3", "scipy>=1.11,<2", "numba>=0.59"]
 keywords = ["Philippines", "distance matrix", "routing", "OSM", "ferries", "PSGC"]
 classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: GIS"]
 
@@ -22,7 +22,7 @@ net-distance-ph-connectivity = "net_distance_ph.connectivity:main"
 fast = ["numba>=0.59"]
 geo = ["geopandas>=1.0", "shapely>=2.1", "pyproj>=3.5", "pandas>=2.0", "openpyxl>=3.1", "requests>=2.31"]
 transport = ["osmium>=4.0", "pyshp>=2.3,<3", "requests>=2.31"]
-test = ["pytest>=8", "pyproj>=3.5", "pyshp>=2.3,<3"]
+test = ["pytest>=8", "pyproj>=3.5", "pyshp>=2.3,<3", "geopandas>=1.0"]
 monitor = ["psutil>=5.9"]
 docs = ["mkdocs-material>=9.5"]
 
