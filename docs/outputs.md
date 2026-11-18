@@ -124,6 +124,28 @@ For towns A and B, the code accumulates `N_AB = sum(reachable sites s,t) p_s p_t
 
 **Unlike the legacy centroid matrix**, the population-weighted diagonal may be positive, and `D_AB` **excludes** barangay snap connectors and demand-to-median access. Unmodeled origins are *not* considered proven disconnected. There is no radius-limited incomplete-wave ambiguity in a **finished** population-weighted output; the legacy `row_validity_radius_km.npy` contract applies to the separate centroid pipeline only. See [exact mathematical definitions](population_weighted.md#5-exactly-what-the-town-matrix-measures).
 
+### View and compare published matrices
+
+From the repository environment, launch the local interactive explorer:
+
+```powershell
+net-distance-ph view
+```
+
+It lists **completed population-weighted output runs** and whichever
+`town`, `province_equivalent`, and `region` levels exist in each run. Selecting
+an administrative unit highlights the **closest X other finite-distance
+units** and ranks their stored `distance_matrix_km.npy` values; the interface
+also reads `reachable_pair_probability.npy` when present. It does **not**
+create or modify matrices and does **not** infer a finite path from a blank
+CSV cell. The selected run and level determine the `units.csv` row order.
+
+Administrative polygons, simplified road classes, and ferries are optional
+**display layers** prepared from the currently selected source releases and
+cached under `variants/population_weighted/view_cache/`. They may not match
+an older matrix's original source releases, and displayed lines are **not
+reconstructed origin–destination paths**. See [the viewer CLI instructions](cli.md#local-output-explorer-view).
+
 ### v56: where the three population-weighted matrices go
 
 The default `net-distance-ph population-weighted` writes **all three** levels under `~/Documents/net-distance-ph/variants/population_weighted/output/YYYY-MM-DD_HH-MM-SS/`: `town/`, `province_equivalent/`, and `region/`. Each has `distance_matrix_km.csv`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, `units.csv`, and `manifest.json`. The command **prints the absolute directory and filenames for each level** and a `LATEST OUTPUT INDEX` path. The durable `variants/population_weighted/output/latest_run.json` contains `matrix_outputs` with these absolute paths. No assumption about the current working directory is needed.

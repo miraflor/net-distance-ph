@@ -16,6 +16,37 @@ net-distance-ph population-weighted --level town
 
 A bare invocation first reuses the **exact SHA-256-verified geometry from the latest completed population run**. With no earlier run, it uses the original OCHA-first-run policy. For a first build, prepare the road/ferry graph with `net-distance-ph run --until graph` and ensure the selected population geometry source is available; do not disable automatic geometry acquisition unless it is already cached. See [the primary method](population_weighted.md) for precise inputs, limitations, and formulas.
 
+## View and compare completed output runs
+
+After at least one population-weighted run has finished, install the viewer's
+GIS dependencies (if not already installed) and open the local explorer:
+
+```powershell
+python -m pip install -e ".[test,geo,transport]"
+net-distance-ph view
+```
+
+The browser opens automatically at `http://127.0.0.1:<port>/`. Keep the
+terminal running while you explore; **Ctrl+C** stops the local server. Use
+the **Completed run** and **Geographic level** selections to switch between
+available dated output folders and town, province-equivalent, or region
+matrices. Click a polygon or search by name/PSGC code, then set **Closest X**
+to highlight and rank finite-distance neighbors. You can toggle boundary,
+road-skeleton and ferry layers and the light/dark theme.
+
+For a nondefault workspace, or to open the printed URL manually:
+
+```powershell
+net-distance-ph view --workspace "D:\Research\net-distance-ph" --port 8765 --no-open
+```
+
+This is a **read-only local viewer**, not a GitHub Pages data service. It reads
+existing matrices and prepares reusable simplified display layers under
+`variants/population_weighted/view_cache/`; no new routing computation is
+performed. The displayed geography uses `current_boundaries.json` and
+`current_transport.json`, so an old matrix may be shown with a newer map
+release. See [the CLI reference](cli.md#local-output-explorer-view) for details.
+
 ## Legacy centroid pipeline setup
 
 The commands in the following sections describe the separate `run.py` and `net-distance-ph run` baseline pipeline. Its `out/` files are **not** the population-weighted OD output.
