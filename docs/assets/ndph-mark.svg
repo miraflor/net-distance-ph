@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Net Distance PH">
+  <rect width="48" height="48" rx="12" fill="#e1f4f7"/>
+  <g fill="none" stroke="#0a839b" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.3">
+    <path d="M7.5 30.5 14.5 12l12 10 10.5-13 3.5 23-13.5 8L7.5 30.5Z"/>
+    <path d="M14.5 12 26.5 22 37 9"/>
+  </g>
+  <g fill="#0a839b">
+    <circle cx="14.5" cy="12" r="3.1"/>
+    <circle cx="26.5" cy="22" r="3.1"/>
+    <circle cx="37" cy="9" r="3.1"/>
+  </g>
+</svg>
