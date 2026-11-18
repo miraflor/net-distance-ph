@@ -162,6 +162,11 @@ def build_parser() -> argparse.ArgumentParser:
     from .population_weighted import add_run_arguments
     add_run_arguments(p)
 
+    p = sub.add_parser("view", help="open the read-only local population-weighted output explorer")
+    p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
+    p.add_argument("--port", type=int, default=0, help="local loopback HTTP port (0 = automatic)")
+    p.add_argument("--no-open", action="store_true", help="print URL without opening the browser")
+
     p = sub.add_parser("status", help="show which inputs, artifacts and reports exist (no computation)")
     _add_shared(p, stage="status")
     p.add_argument("--json", action="store_true", help="print machine-readable status")
@@ -341,6 +346,13 @@ def _doctor(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "view":
+        from .view import run_view
+        try:
+            return run_view(args.workspace, port=args.port, open_browser=not args.no_open)
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"VIEW ERROR: {exc}", file=sys.stderr)
+            return 2
     if args.command == "reset":
         from .reset import run as reset_run
         try:
