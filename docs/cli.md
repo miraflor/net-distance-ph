@@ -338,3 +338,38 @@ CSV and JSON outputs: `workspace/output/origin_snap_sensitivity/<routing_prefix>
 
 Results from the earlier v51 OSM audit about restricted roads are independent
 context; **no restricted-road paths are treated as routable** in v52.
+
+## Six-barangay polygon/network validation (v53)
+
+`net-distance-ph audit-polygon-network` checks the **same six v52 urban
+barangays** (Paliparan III; Santo Niño; Punta Princesa; Caloocan 181 and
+182; New Cabalan) against their **pinned and SHA-256-verified ADM4 polygons**.
+This is a bounded read-only GIS quality-assurance operation, not another
+national search or a revision to road or population geometry.
+
+Requires the cached pinned `PH_Adm4_BgySubMuns_complete.shp.zip`, exact
+`barangay_points_faeldon_*.csv` from the original population run, and the
+existing v52 origin-snap sensitivity report. It refuses changed source
+bytes and does not download anything. For six polygon shapes only, it tests:
+
+- origin/current snap/alternative main-road point-in-polygon (`covers`);
+- intersections between polygon geometry and **existing eligible ROAD graph
+  segments**, grouped by original graph connected component;
+- total intersecting road-segment lengths and point-to-road-segment distances
+  in a local azimuthal-equidistant metric projection;
+- v51 gap-window OSM access-tag counts as **context**, not evidence that an
+  individual road belongs to the barangay or provides valid access.
+
+Writes `workspace/output/polygon_network_consistency/<run-prefix>/`:
+`polygon_network_consistency.json`, `six_barangay_findings.csv`,
+`six_barangay_overlay.geojson` (source polygon, original point, two snapped
+road vertices, nearest in-polygon road segments for each component).
+
+**Do not use this report to invent junctions, connect roads across water,
+override access restrictions or forcibly move a barangay's population.**
+A road inside a polygon may still be inaccessible from a particular site;
+its presence is not proof of passable street access or accurate population
+distribution. Individual polygons with invalid source geometry are repaired
+for *measurement only* and explicitly flagged. For other geometry policies
+(e.g. OCHA, custom points), this implementation refuses rather than silently
+substitute a different polygon release.

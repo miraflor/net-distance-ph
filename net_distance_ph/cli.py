@@ -153,6 +153,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--top", type=int, default=15, help="largest nonmain populated components to audit (default 15)")
     p.add_argument("--ranks", nargs="+", type=int, help="specific original v50 priority ranks, e.g. 2 6 7 8 9")
 
+    p = sub.add_parser("audit-polygon-network", help="v53 read-only six-barangay polygon/road network GIS consistency")
+    p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
+    p.add_argument("--run-dir", type=Path, help="existing population-weighted routing run (default latest)")
+
     # Optional population-weighted matrices; baseline run stages remain unchanged.
     p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
     from .population_weighted import add_run_arguments
@@ -343,6 +347,15 @@ def main(argv: list[str] | None = None) -> int:
             return reset_run(args)
         except (ValueError, OSError, RuntimeError) as exc:
             print(f"RESET REFUSED: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "audit-polygon-network":
+        from .polygon_network_audit import execute as polygon_network_execute
+        from .workspace import run_log
+        try:
+            with run_log(workspace_path(args.workspace)):
+                return polygon_network_execute(args)
+        except (OSError, ValueError, RuntimeError, KeyError, ImportError) as exc:
+            print(log_prefix() + f" POLYGON NETWORK AUDIT REFUSED: {exc}", file=sys.stderr)
             return 2
     if args.command == "audit-origin-snap":
         from .origin_snap_audit import execute as origin_snap_execute
