@@ -147,3 +147,29 @@ Each session writes both a `run-*.log` and a `run-*.jsonl` in workspace
 `phases` as well as the three outer stages. Routing ETA is an estimate from
 observed processing speed, not a guaranteed finish time. Historical logs
 remain unchanged. Installing logging never invalidates or recomputes matrices.
+
+## Resource telemetry and evidence report (v48)
+
+Install optional process-tree CPU/RAM sampling with
+`python -m pip install -e ".[monitor]"` (uses `psutil`). Without the extra,
+timing works but resource statistics are marked *unavailable*. The sampler
+reports observed peak **summed process-tree RSS** and **CPU core-equivalents**;
+shared pages may be counted more than once and brief spikes may be missed.
+Sampling does not verify routing correctness.
+
+`net-distance-ph observe` analyzes existing workspace logs and writes
+`logs/observability_report.json`, without executing the pipeline or deleting
+outputs. `net-distance-ph observe --json` prints the complete report; add
+`--no-write` to avoid creating a report file. For future fresh-run commands,
+`logs/fresh_run_observability.json` is written automatically.
+
+Known-denominator progress includes counts, throughput, and an observed-rate
+ETA. Road extraction reports throughput but intentionally says *ETA unknown*
+because the total accepted ways cannot be known ahead of parsing. Other
+indeterminate phases retain accurate elapsed/resource heartbeats without
+manufactured completion percentages.
+
+The evidence report distinguishes actual sampled numerical verification and
+population coverage from *not assessed* national connectivity, legal boundary
+validity, and real-world ferry service validity. A successful exit status
+is not a scientific certification. Historic results and logs are not changed.

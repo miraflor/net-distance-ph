@@ -12,6 +12,8 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+# Resource-aware timing (v48)
+from .observability import ResourceSampler
 import sys
 import threading
 import time
@@ -188,41 +190,52 @@ def run_log(workspace):
 
 
 @contextmanager
+
 def timed_step(name, heartbeat_seconds=30):
-    """One heartbeat for the deepest active phase; journal start and finish."""
+    """Track monotonic duration and sampled process-tree resources for a phase.
+
+    Nested phases have only one visible heartbeat, but individual spans retain
+    their measured inclusive durations and sampled peaks in the event journal.
+    """
     started = time.monotonic()
     trace = _ACTIVE_TRACE.get()
     phase_id, _ = trace.enter(name) if trace is not None else (None, None)
     stop = threading.Event()
+    monitor = ResourceSampler(interval=2.0).start()
 
     def heartbeat():
         while not stop.wait(heartbeat_seconds):
             if trace is None or trace.current(phase_id):
-                print(f"STILL RUNNING: {name} ({format_elapsed(time.monotonic() - started)})", flush=True)
+                print(f"STILL RUNNING: {name} ({format_elapsed(time.monotonic() - started)}) | "
+                      f"{monitor.status()}", flush=True)
 
     thread = threading.Thread(target=heartbeat, daemon=True, name="net-distance-ph-heartbeat")
     print(f"START: {name}", flush=True)
     thread.start()
+    failed = None
     try:
         yield
     except BaseException as exc:
-        duration = time.monotonic() - started
-        print(f"FAILED: {name} ({format_elapsed(duration)}); "
-              f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-        if trace is not None:
-            trace.record("phase_failed", phase=name, phase_id=phase_id,
-                         elapsed_seconds=round(duration, 3), error_type=type(exc).__name__, error=str(exc))
+        failed = exc
         raise
-    else:
-        duration = time.monotonic() - started
-        print(f"DONE: {name} ({format_elapsed(duration)})", flush=True)
-        if trace is not None:
-            trace.record("phase_finish", phase=name, phase_id=phase_id,
-                         elapsed_seconds=round(duration, 3), status="complete")
     finally:
         stop.set()
         thread.join(timeout=1)
+        duration = time.monotonic() - started
+        resources = monitor.finish()
+        message = f"{name} ({format_elapsed(duration)}) | {monitor.status()}"
+        if failed is None:
+            print(f"DONE: {message}", flush=True)
+        else:
+            print(f"FAILED: {message}; {type(failed).__name__}: {failed}", file=sys.stderr, flush=True)
         if trace is not None:
+            payload = dict(phase=name, phase_id=phase_id,
+                           elapsed_seconds=round(duration, 3), **resources)
+            if failed is None:
+                trace.record("phase_finish", status="complete", **payload)
+            else:
+                trace.record("phase_failed", error_type=type(failed).__name__,
+                             error=str(failed), **payload)
             trace.leave(phase_id)
 
 

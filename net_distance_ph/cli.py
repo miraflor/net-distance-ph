@@ -117,6 +117,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--workers", type=int, default=2, help="routing worker processes for optional fresh run")
     p.add_argument("--heartbeat-seconds", type=float, default=30.0, help="heartbeat interval for fresh run")
 
+    p = sub.add_parser("observe", help="read-only audit of logs and timing; no computation")
+    p.add_argument("--workspace", type=Path, help="existing workspace")
+    p.add_argument("--json", action="store_true", help="print full report JSON")
+    p.add_argument("--no-write", action="store_true", help="do not write observability_report.json")
+
     # Optional population-weighted matrices; baseline run stages remain unchanged.
     p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
     from .population_weighted import add_run_arguments
@@ -308,6 +313,21 @@ def main(argv: list[str] | None = None) -> int:
         except (ValueError, OSError, RuntimeError) as exc:
             print(f"RESET REFUSED: {exc}", file=sys.stderr)
             return 2
+    if args.command == "observe":
+        from .observability import report_existing
+        try:
+            report = report_existing(workspace_path(args.workspace), write=not args.no_write)
+        except (OSError, ValueError) as exc:
+            print(f"OBSERVE ERROR: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+        else:
+            print(log_prefix() + " Observability report: " + report.get("report_path", "read-only"))
+            for name, check in report["checks"].items():
+                print(f"  {name}: {check['status']}")
+            print("  Scientific validation: not established (evidence inventory only)")
+        return 0
     if args.command == "status":
         return _status(args)
     if args.command == "doctor":

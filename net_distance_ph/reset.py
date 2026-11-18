@@ -39,6 +39,12 @@ PATCH_DOWNLOAD_NAMES = (
     "net-distance-ph-pre-v45-review",
     "net_distance_ph_reset_v46.zip",
     "net_distance_ph_reset_v46",
+    "net_distance_ph_logging_v47.zip",
+    "net_distance_ph_logging_v47",
+    "net_distance_ph_logging_v47_1.zip",
+    "net_distance_ph_logging_v47_1",
+    "net_distance_ph_observability_v48.zip",
+    "net_distance_ph_observability_v48",
 )
 PATCH_BACKUP_NAMES = (
     "net-distance-ph-adaptive-median-backup",
@@ -162,6 +168,7 @@ def _run_from_zero(repo, workspace, *, branch, commit, workers, heartbeat):
     env["NET_DISTANCE_PH_JOURNAL_PATH"] = str(journal.resolve())
     results = []
     for name, argv in stages:
+        previous_logs = set(logs.glob("run-*.log"))
         started = datetime.now().isoformat(timespec="seconds")
         with journal.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"event": "start", "stage": name, "at": started, "argv": argv}) + "\n")
@@ -176,6 +183,7 @@ def _run_from_zero(repo, workspace, *, branch, commit, workers, heartbeat):
         elapsed = round(time.monotonic() - t, 3)
         result = {"stage": name, "exit_code": code, "elapsed_seconds": elapsed,
                   "started_at": started, "finished_at": datetime.now().isoformat(timespec="seconds")}
+        result["log_files"] = [str(p) for p in sorted(set(logs.glob("run-*.log")) - previous_logs)]
         results.append(result)
         with journal.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"event": "finish", **result}) + "\n")
@@ -193,14 +201,22 @@ def _run_from_zero(repo, workspace, *, branch, commit, workers, heartbeat):
             entry = json.loads(line)
             if entry.get("event") in ("phase_finish", "phase_failed"):
                 phases.append({key: entry[key] for key in
-                               ("event", "at", "session_id", "phase", "elapsed_seconds", "status", "error_type")
+                               ("event", "at", "session_id", "phase", "elapsed_seconds", "status", "error_type", "resource_status", "resource_samples", "peak_process_tree_rss_bytes", "peak_cpu_cores", "peak_machine_cpu_percent", "peak_observed_processes", "sampling_errors")
                                if key in entry})
-    summary.write_text(json.dumps({"schema": "net-distance-ph/fresh-run/v47",
+    from .observability import build_report
+    stage_logs = [p for result in results for p in result.get("log_files", [])]
+    report = build_report(workspace, stage_logs, status="complete" if complete else "failed",
+                          stages=results, phases=phases, git_commit=commit)
+    report_file = logs / "fresh_run_observability.json"
+    report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
+    summary.write_text(json.dumps({"schema": "net-distance-ph/fresh-run/v48",
        "status": "complete" if complete else "failed", "git_branch": branch, "git_commit": commit,
        "workspace": str(workspace), "total_elapsed_seconds": round(time.monotonic()-started_total, 3),
-       "stages": results, "phases": phases, "journal": str(journal)}, indent=2) + "\n", encoding="utf-8")
+       "stages": results, "phases": phases, "journal": str(journal),
+       "observability_report": str(report_file), "scientific_validation": "not_established"}, indent=2) + "\n", encoding="utf-8")
     _say(f"TIMING SUMMARY: {summary}")
     _say(f"EVENT JOURNAL: {journal}")
+    _say(f"OBSERVABILITY REPORT: {report_file} (scientific validity not established)")
     return 0 if complete else (results[-1]["exit_code"] or 2)
 
 

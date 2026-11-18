@@ -249,6 +249,7 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
 @_pw_timed_phase("adaptive k-medians selection")
 def build_town_sites(home, core_dir, key, rows, roster, params):
     """Town-sized exact local network D matrices; checkpoint selected sites per town."""
+    selection_started = time.monotonic()  # v48 progress clock
     G=mx.load_core(core_dir,mmap=True)
     ncomp,label=connected_components(G,directed=False)
     # Population is precisely the published 2024 barangay weight.
@@ -362,7 +363,7 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
                           "selection_score":diagnostic.get("selection_score", ""),
                           "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True)})
         if ni%100==0 or ni==len(codes):
-            print(f"Selected weighted network representatives: {ni:,}/{len(codes):,} towns; sites so far {len(all_sites):,}",flush=True)
+            _pw_progress("adaptive k-medians selection", ni, len(codes), selection_started, unit="towns")
     if "median_selection" in params["selection"]:
         from .population_data import _write_csv
         _write_csv(cache_dir/"selection_audit.csv",

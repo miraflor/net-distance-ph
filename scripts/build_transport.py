@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time  # v48 throughput clock
 from urllib.parse import urlparse
 import uuid
 import xml.etree.ElementTree as ET
@@ -242,6 +243,7 @@ def _extract(source: Path, stage: Path, classes: set[str], allow_no_ferries=Fals
     ferry = stage / canonical_name("ferries")
     counts = Counter()
     rejected = Counter()
+    extract_started = time.monotonic()  # v48 throughput
     with shapefile.Writer(str(road), shapeType=shapefile.POLYLINE, encoding="utf-8") as roads, \
             shapefile.Writer(str(ferry), shapeType=shapefile.POLYLINE, encoding="utf-8") as ferries:
         for writer in (roads, ferries):
@@ -259,7 +261,10 @@ def _extract(source: Path, stage: Path, classes: set[str], allow_no_ferries=Fals
             writer.record(str(osm_id), osm_class)
             counts[kind] += 1
             if counts[kind] % 100000 == 0:
-                print(f"  {kind}: {counts[kind]:,} OSM ways", flush=True)
+                elapsed = max(time.monotonic() - extract_started, 1e-9)
+                rate = counts[kind] / elapsed
+                print(f"  {kind}: {counts[kind]:,} OSM ways | {rate:.0f} ways/s | "
+                      "ETA unknown (total unknown)", flush=True)
 
         if source.suffix.lower() in (".osm", ".xml"):
             for osm_id, classification, coords in _xml_ways(source, classes):
