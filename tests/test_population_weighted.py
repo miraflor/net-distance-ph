@@ -415,7 +415,7 @@ def test_run_skips_missing_but_retains_unmodeled_town(tmp_path, monkeypatch):
     monkeypatch.setattr(routing,'verify_original_graph',lambda *a,**kw:{'checked':0})
     args=parse_args(['--workspace',str(ws),'--dataset-dir',str(ds),'--level','town','--verify-sites','0'])
     assert routing.run(args)==0
-    result=ws/'variants/population_weighted/output'/('2'*16)/'town'
+    result=Path(json.loads((ws/'variants/population_weighted/output/latest_run.json').read_text(encoding='utf-8'))['directory'])/'town'
     assert result.is_dir()
     assert np.load(result/'population_per_unit.npy').tolist()==[100,900]
     assert np.load(result/'modeled_population_per_unit.npy').tolist()==[100,0]
