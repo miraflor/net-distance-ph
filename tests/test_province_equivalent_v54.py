@@ -101,7 +101,7 @@ def test_missing_published_parent_refused():
 def test_cli_defaults_and_explicit_outputs():
     from net_distance_ph.population_weighted import parse_args
     default = parse_args([])
-    assert default.level == "town"
+    assert default.level == "all"
     assert default.median_selection == "balanced"
     assert parse_args(["--level", "province"]).level == "province"
     assert parse_args(["--level", "province-equivalent"]).level == "province-equivalent"

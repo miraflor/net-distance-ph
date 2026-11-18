@@ -1,4 +1,8 @@
-# Running the four-stage pipeline
+# Running the legacy four-stage centroid pipeline
+
+<!-- v55-methods-documentation -->
+
+**This is the legacy one-reference-point-per-locality graph/matrix runner.** The primary population-weighted method is `net-distance-ph population-weighted` (all three population-weighted matrices, balanced component-aware k-medians by default). It reuses the prepared original graph but builds a separate demand-terminal core and output directory. See [the primary method](population_weighted.md) and [current CLI](cli.md).
 
 The default entry point, `python run.py all`, first prepares missing inputs
 from independent upstream sources in `~/Documents/net-distance-ph/data/` and

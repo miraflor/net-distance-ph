@@ -107,9 +107,10 @@ def test_crosswalk_change_invalidates_cached_geometry(tmp_path,monkeypatch):
     assert a != b
 
 
-def test_default_source_strictly_ocha_and_cli_agree(tmp_path,monkeypatch):
+def test_geometry_api_defaults_to_ocha_while_cli_prefers_latest(tmp_path,monkeypatch):
     from net_distance_ph.population_weighted import parse_args
-    assert parse_args([]).geometry_source == 'ocha'
+    assert parse_args([]).geometry_source == 'latest'
+    assert parse_args(['--geometry-source', 'ocha']).geometry_source == 'ocha'
     calls=[]
     def ocha(ws,ds,codes):
         calls.append('OCHA')

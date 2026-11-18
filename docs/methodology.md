@@ -1,4 +1,8 @@
-# Methodology
+# Legacy centroid-network methodology
+
+<!-- v55-methods-documentation -->
+
+**This page describes the separate, legacy one-locality-reference-point pipeline.** The project's primary population-weighted town OD workflow has different origin, distance, diagonal and reachability definitions; see [the complete current method](population_weighted.md), [outputs](outputs.md) and [literature](literature.md).
 
 This is a **graph shortest-path model** with geometric distance weights. Its
 primary choices are explicit so that the meaning of the matrix can be assessed

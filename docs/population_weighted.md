@@ -1,106 +1,141 @@
-# Population-weighted representative-site routing
+<!-- v55-methods-documentation -->
+# Population-weighted road-and-ferry OD method
 
-This model is **optional** and does not alter the original centroid matrix or its validated transport network.
+This page describes the **implemented default model** on the `feat/population-adaptive-k-medians-timing` code line after v56. It is distinct from the [legacy one-centroid-per-locality pipeline](methodology.md). The primary analytical unit is a **town (city or municipality)**. By default, town, province-equivalent and region matrices are produced together as *aggregations of the same routing results*.
 
-The command is `net-distance-ph population-weighted`. Use `--level town|province|region|all` (default `all`). The core files are isolated in `variants/population_weighted`.
+## 1. Commands and defaults
 
-## Data
+| Option | Implemented behavior |
+| --- | --- |
+| `net-distance-ph population-weighted` | **All three levels**; component-aware, **balanced k-medians** |
+| `--level town` | Explicit single-level request; town only |
+| `--level province` / `--level province-equivalent` | Only a **province-equivalent** matrix; historical `province/` is not overwritten |
+| `--level region` | Only region matrix |
+| `--level all` | **Default**; town, province-equivalent and region matrices |
+| `--median-selection balanced` | Default automatic k-selection *within each populated graph component*, subject to a **town-wide** 12-site cap |
+| `--median-selection one` | One network median **per populated component**, not one per town |
+| `--max-mean-access-km X` | Explicit budgeted greedy/1-swap selection instead of the balanced policy |
+| `--max-sites-per-town 12` | Default global cap per town, **not** per component |
+| `--max-snap-km 25` | Default maximum origin-to-graph snapping radius |
+| `--geometry-source latest` | **Default**: reuse exact hash-verified cached geometry from last completed run; if none exists, use OCHA |
+| `--geometry-source ocha` | Explicit OCHA-only source; unmatched barangays audited as unmodeled |
+| `--geometry-source faeldon` | Explicit use of the separately pinned PSA-aligned polygon derivative |
 
-All administrative identities, parent relationships, and 2024 barangay populations are read from flat `units.csv` and `barangay_population.csv`; provider-specific source files are not required during a run. The optional `geometry_crosswalk.csv` contains current `psgc_code` and historical `ocha_pcode` columns for a traceable spatial join to older OCHA boundaries. User datasets can provide their own code crosswalk and point coordinates.
+The default preserves source identity from the **latest completed run** when its exact point CSV remains in the local cache and all recorded SHA-256 hashes agree; if no completed run exists, the original OCHA-first-run policy applies. For explicit reproducibility of your current Faeldon national run, use:
 
-## Geometry providers
+```powershell
+net-distance-ph population-weighted --geometry-source faeldon --no-auto-geometry
+# This one command now writes town, province-equivalent and region outputs.
+```
 
-The **default `net-distance-ph population-weighted` uses OCHA only**, obtained from the official HDX package API. The COD-AB layer largely reflects 2023 barangay boundaries and p-codes. Unmatched 2026 barangays are **audited and skipped by default**, with their full census population retained in town/province/region coverage denominators (no faeldon geometry is downloaded implicitly). Set `--missing-geometry-policy error` only when strict geometry completeness is required. Explicit `--geometry-source auto` opts into OCHA-first with faeldon fallback for unmatched codes or OCHA acquisition failures. The source of each chosen point is recorded in `geometry/*_source_audit.csv`; its ZIP URL and SHA-256 are recorded in the adjacent JSON. Geometries are **representative points on polygons**, not population centers. A direct `--points` or `barangay_points.csv` override always wins.
+The CLI prints the exact file and folder paths for every requested level and records them in `latest_run.json`. Use `--level town|province|region` only when a subset is desired. An existing latest run with lost or changed geometry is rejected rather than silently switched to a different source.
 
-The faeldon source is a community-maintained derivative of PSA/NAMRIA/OCHA geometry, not legally certified 2026 polygon survey data. Users should compare representative origins against known settlements before inferring physical accessibility. The baseline centroid model is not silently changed.
+The population-weighted workflow requires the saved stage-1 road/ferry graph and compatible sources. It reuses the graph, population core, medoid-site checkpoints and source-to-site routing checkpoints when their fingerprints agree. Selecting an upper tier does **not** build a new graph or define new upper-tier medoids; OD routing may still need to run if matching town checkpoints are absent.
 
-## Snap coverage and treatment of unknowns
+## 2. Administrative and population inputs
 
-The original default behavior stopped whenever one of 41,998 positive-population barangays could not be attached to the existing road/ferry graph within 25 km. The optional v4 default retains those observations in `cores/<hash>/snap_audit.csv`, excludes them from graph routing without creating new links, and keeps their census population in all output denominator calculations. They are **unmodeled**, not known unreachable. The CLI can restore strict behavior with `--unsnappable-policy error`. Do not enlarge the snap limit automatically.
+The flat input tables are `units.csv` (explicit ten-character PSGC codes, levels and parents) and `barangay_population.csv` (nonnegative integer populations). The bundled normalized data are derived from the **PSA Q2 2026 PSGC** roster and **2024 barangay populations**. The relevant source and input SHA-256 values are recorded. Any alternative tables must preserve their own consistent identifiers and provenance.
 
-`population_per_unit.npy` is the complete population represented by the input tables in the specified administrative level. `modeled_population_per_unit.npy` contains only successfully snapped barangay population. `origin_population_coverage.npy` is their ratio. `reachable_pair_probability.npy` is a **lower bound on demonstrated pairwise road/ferry reachability**, with unsnappable population still present in the denominator. No unmodeled route is assigned a fabricated distance.
+A positive-population barangay b contributes an origin point x_b and census weight P_b. The available geometry policy constructs a **point inside its administrative polygon** (not a population centroid, building address or residential sample). The OCHA geometries (when explicitly chosen or used for a first run) may reflect an earlier code vintage; unmatched current PSGC barangays are **audited and left unmodeled** unless an explicit compatible alternate geometry is selected. `--geometry-source auto` explicitly permits the OCHA-to-Faeldon fallback. User-supplied points can override both providers.
 
-## Distances
+Each point is snapped to its nearest selected **road node** within 25 km where possible, otherwise to a nearby node of any kind under the existing fallback policy. The final assigned node, connector distance, and validity are recorded. Unsnappable or missing-geometry barangays do not acquire invented routes and are **still counted in the full population denominator**. Thus, origin coverage and demonstrated reachability must not be conflated.
 
-Medoids minimize population-weighted shortest-path access within each populated connected component of each town. **The default is now automatic component-wise k-selection**, chosen by a transparent balanced normalized rate–distortion rule. To reproduce the previous release use `--median-selection one`, which selects exactly one weighted network 1-median per populated connected component. An explicit `--max-mean-access-km` invokes the prior deterministic greedy + 1-swap access-budget method (cannot combine with `--median-selection one`). The total per-town cap remains `--max-sites-per-town` (default 12), not 12 per component. Province and region outputs aggregate population-pair totals from town sites; the population weights always originate in barangay records. Distances are *conditional means among reachable represented site pairs*, and within-unit diagonals need not be zero. Representation-error bounds refer to the **modeled, snapped origin population**, not to missing origin locations or the accuracy of the underlying OSM topology.
+All people in a barangay are represented by **one snapped origin**. This is an explicit approximation: a real barangay may contain road segments in multiple disconnected graph components. v53 polygon/network checks demonstrate that possibility; they do not determine each resident's actual road attachment. No gridded population or dasymetric dataset is currently required or applied.
 
-The route core preserves all valid barangay terminal nodes separately from the baseline centroid core. A sampled verifier compares site distances to the original, unreduced graph. OSM graph connectivity and origin geography are scientifically independent sources of uncertainty.
+## 3. Road/ferry graph and shortest paths
 
-Use `net-distance-ph population-weighted --geometry-source faeldon` to force the checksum-verified fallback when HDX access or disk space is problematic. This does not change any existing baseline output.
+The graph contains road and mapped ferry polyline segments, weighted by geographic length (km). Edges are **undirected**, and ferry-polyline *endpoints*, rather than arbitrary mid-route shape points, are candidates for terminal-to-road gangways. The graph reduction preserves selected nodes and constructed-graph shortest paths; an independent sampled verifier compares reduced and original-graph results. These tests do not certify ferry timetables, legal road access, or a fully correct physical network. See [transport](transport.md), [legacy graph methodology](methodology.md), and [validation](validation.md).
 
-## Incomplete administrative geometry (v4.2)
+Let d_G(u,v) be the nonnegative shortest-path distance between two attached graph nodes. If they are disconnected in the constructed graph, d_G(u,v) = infinity. The location-allocation and OD stages respect these components; no new edges are created merely to make all residents reachable.
 
-By default, `net-distance-ph population-weighted` continues when some OCHA barangay
-polygons cannot be reconciled to the chosen plain population dataset. It writes:
+## 4. Connected-component-aware network k-medians
 
-- `variants/population_weighted/geometry/*_source_audit.csv`: one entry per
-  barangay in the administrative dataset, including `missing_geometry` status;
-- `variants/population_weighted/geometry/missing_origins_*.csv`: all **positive-population**
-  unmatched barangays with their town and population;
-- each output `manifest.json`: `missing_geometry_barangays`,
-  `missing_geometry_population`, and the audit path.
+Multiple barangays that snap to the same network vertex within a town are combined **by summing their population**, without dropping their original snap-offset contributions from representation diagnostics. Let V_c be the distinct weighted demand vertices within connected component c of a town, and p_i the population at demand vertex i. Candidate medoids are **these vertices**, not arbitrary points on graph edges.
 
-The missing population remains part of `population_per_unit.npy` but not
-`modeled_population_per_unit.npy`. The reachability-probability denominator
-uses the **full** population, treating missing geometry as *unmodeled*, not
-as a confirmed disconnection. Municipalities without any routable origins
-remain in the output with infinite distance and zero reachability probability.
-Only a complete absence of any usable positive-population origin is fatal.
+For a chosen medoid set S_c, the familiar *discrete network p-median* access cost is
 
-`--missing-geometry-policy error` restores the completeness requirement.
-OCHA download errors and malformed datasets are still errors, not "missing
-coverage"; there is no automatic faeldon fallback.
+\[
+J_c(S_c)=\sum_{i\in V_c}p_i\min_{m\in S_c}d_G(i,m).
+\]
 
+The **k=1** solution is exact among the allowed demand vertices; larger k candidate sets use deterministic greedy addition followed by up to three 1-swap improvement passes. They are **heuristics**, not guaranteed globally optimal k-medians. The system initializes at least one site for **each populated network component** and refuses when a town has more populated components than `max-sites-per-town`.
 
-## Adaptive component-wise k-median selection (v4.3)
+For the default `--median-selection balanced`, let C be the number of populated components, n the total number of distinct demand vertices across them, K = sum_c k_c, and J_c(k_c) the **computed heuristic** cost curve for component c. Subject to C <= K <= min(n, `max-sites-per-town`), the program chooses among the evaluated allocations to minimize
 
-Default `--median-selection balanced` selects **k separately for every populated
-connected component**, while enforcing a **single maximum count per town**.
-For each component `c`, `J_c(k)` is the population-weighted total shortest-path
-access to its nearest `k` medoids, among candidate snapped barangay nodes. The
-exact one-median starts each component's cost curve. Larger `k` use deterministic
-greedy augmentation and 1-swap refinement; these are **heuristics** for the
-NP-hard discrete k-median optimization, not exact global solvers.
+\[
+L(K)=\frac{\sum_cJ_c(k_c)}{\sum_cJ_c(1)}+\frac{K-C}{n-C}.
+\]
 
-The automatic policy minimizes across evaluated site allocations:
+When a denominator is zero, the implementation handles that case explicitly and prefers smaller feasible K on ties. The allocation uses dynamic programming over computed component curves and a deterministic tie-break. This is a **project-defined normalized access-versus-representative-count criterion**; equal weights on the two terms are a modeling choice. **It is not a theorem, a published canonical k-selector, or a universally optimal k.** Classical network-median models and local-search heuristics underpin the cost curves, not this particular balancing rule ([Hakimi 1964, 1965; Teitz & Bart 1968](literature.md)).
 
-    score = [sum_c J_c(k_c) / sum_c J_c(1)]
-          + [sum_c (k_c - 1) / sum_c (n_c - 1)]
+Each demand vertex is assigned to its closest chosen medoid **within the same connected component**. The representative's population weight is the sum of the assigned demand populations. Per-site mean access diagnostics include network access from assigned demand vertices and their saved origin-to-road offsets; those access quantities **are not added to the OD distance matrix**.
 
-where `n_c` is the number of distinct positive-population snapped demand nodes
-in that component. The first fraction measures *remaining road-access
-representation distortion* relative to the one-median baseline. The second
-fraction measures *additional representative sites* as a fraction of all
-optional demand nodes. In degenerate cases (no extra demand nodes or zero
-baseline distortion), the smallest feasible k is selected. Both terms are
-normalized, so there is **no user-supplied penalty or kilometer threshold**.
-Equal importance of these two ratios is an explicit modeling assumption;
-this criterion yields an optimal k **for this specified tradeoff and the
-computed heuristic cost curves**, not a universally optimal statistical k.
+## 5. Exactly what the town matrix measures
 
-Population assignment to chosen sites, the town-to-town conditional
-population-weighted mean of reachable representative shortest paths, reachability
-probabilities and **all population denominators remain unchanged**. The policy
-adds no geographic links or origin points. It is *not* the minimum site-to-site
-distance and is not the exact expected distance between individual residents.
+Let S_A and S_B be the selected medoid sites for towns A and B, with assigned census-derived masses p_s and p_t; let I_st be 1 when d_G(s,t) is finite and 0 otherwise. The code first accumulates the **unnormalized** population-pair totals
 
-A fresh selection-specific checkpoint is written under
-`variants/population_weighted/town_sites/<core-key>/<selection-key>/`, including
-`selection_audit.csv` (town, demand-node count, components, medians, component
-allocations, mean access, and score) and `selection_policy.json`. This makes
-choices reproducible and prevents mixing old one-median selection checkpoints
-with adaptive selection. Existing national graphs, barangay cores, and earlier
-published output matrices remain intact. New representative-site sets use a
-new routing fingerprint; the existing routing checkpoint may be reused *only*
-when the exact representative sites and weights are identical.
+\[
+N_{AB}=\sum_{s\in S_A}\sum_{t\in S_B}p_sp_tI_{st}\,d_G(s,t),
+\qquad
+R_{AB}=\sum_{s\in S_A}\sum_{t\in S_B}p_sp_tI_{st},
+\]
 
-**Commands:**
+where disconnected terms contribute zero to N and R, rather than evaluating an undefined 0-times-infinity expression. The distance matrix is
 
-    net-distance-ph population-weighted --geometry-source faeldon
-    net-distance-ph population-weighted --geometry-source faeldon --median-selection one
-    net-distance-ph population-weighted --geometry-source faeldon --max-mean-access-km 10
+\[
+\boxed{D_{AB}=N_{AB}/R_{AB}\quad\text{if }R_{AB}>0;\qquad D_{AB}=+\infty\text{ otherwise}.}
+\]
 
-Use the second command to reproduce the old default, and the third to apply a
-*user-specified* kilometer error budget rather than automatic rate–distortion
-selection. These are scientifically distinct modeling choices and should be
-compared rather than conflated.
+**D is the conditional, weighted average shortest-path distance between modeled *representative graph nodes* when a modeled route exists.** It is **not** the minimum town-to-town distance; **not** centroid-to-centroid distance; **not** a resident-to-resident trip expectation; and **not** a travel-time or schedule estimate. The stored primary D **excludes** original barangay-to-road connectors and within-town origin-to-median access. Those are summarized separately for interpretation and approximation diagnostics.
+
+Let P_A and P_B be the **full census** population totals (including origins missing from the model). The companion reachability quantity is
+
+\[
+\boxed{Q_{AB}=R_{AB}/(P_AP_B)}
+\]
+
+for positive population totals, otherwise zero. `reachable_pair_probability.npy` is the fraction of all census population-pair mass with a **demonstrated modeled route**; unmodeled population remains in the denominator. It therefore should **not** be read as a measured real-world travel probability or as proof that all unmatched residents are disconnected.
+
+The matrix is symmetric because the road/ferry graph is undirected. **Within-town diagonals may be positive**: they represent two independent selections of the town's population-weighted medoid sites, not the conventional zero cost of a single place to itself. For pairs with Q=0, D is `inf`; CSV blank cells do not carry Q or its cause. Always load the reachability file.
+
+## 6. Upper levels are aggregations, not fresh routing
+
+For an administrative unit U made of towns, population is P_U = sum_{i in U} P_i. The code sums **town-level N and R**, then divides:
+
+\[
+N_{UV}=\sum_{i\in U}\sum_{j\in V}N_{ij},\quad
+R_{UV}=\sum_{i\in U}\sum_{j\in V}R_{ij},\quad
+D_{UV}=N_{UV}/R_{UV}\quad(R_{UV}>0).
+\]
+
+Reachability again uses full P_U P_V. **Never average the already-divided D_ij values without their reachable population-pair weights.** The same original barangay population ultimately underlies town, province-equivalent, and region matrices.
+
+`--level province` now denotes a **province-equivalent administrative layer** (`province_equivalent/`): an official province contains its documented member towns; each city or municipality **without a province parent** becomes its own peer OD unit. This includes Pateros and SGA municipalities; province-less cities are labeled `nonprovincial_city`, **not guessed** into HUC/ICC legal categories because the normalized hierarchy does not include that distinction. An explicit user-provided `--province-crosswalk` can assign a province-less town to a registered province, with validation. Every town maps to exactly one upper unit; its population is not omitted. An old `province/` matrix may still exist but is a different, historically incomplete product.
+
+## 7. Artifacts, checkpoint integrity and uncertainty
+
+Population-weighted outputs live under `~/Documents/net-distance-ph/variants/population_weighted/output/<routing-hash-prefix>/<level>/`, with `<level>` one of `town`, `province_equivalent`, or `region`. `latest_run.json` records the requested levels, not every level ever computed. The same route hash can have different exported subsets; selecting an upper-level output can reuse completed town OD totals.
+
+| Artifact | Interpretation |
+| --- | --- |
+| `distance_matrix_km.npy`, `.csv` | Conditional representative-site network distance (km), with `inf` for no demonstrated route; CSV renders nonfinite cells blank |
+| `reachable_pair_probability.npy` | Demonstrated reachable **census-pair fraction**, Q |
+| `population_per_unit.npy` | Full input census population per unit |
+| `modeled_population_per_unit.npy` | Population successfully represented by a snapped origin |
+| `origin_population_coverage.npy` | Modeled/full origin population ratio |
+| `mean_representation_access_km.npy` | Mean demand-to-site road access **including origin snap offsets** |
+| `distance_approximation_bound_km.npy` | Code-computed approximation diagnostic using mean access and Q; **not** an externally validated real-trip error bound |
+| `units.csv` | Row order, PSGC, name, population, and for province equivalents `unit_type` |
+| `manifest.json` | Level, definition, source hashes, coverage, route and core fingerprints |
+
+`representative_sites.csv`, selection-specific `selection_audit.csv`, `selection_policy.json`, origin `snap_audit.csv`, and geometry coverage audits document the approximations. Checkpoints are keyed by input/geometry/selection/routing identity and must not be mixed. See [outputs](outputs.md) and [reproducibility](reproducibility.md).
+
+## 8. Scope and scientific reporting
+
+The result is a **plausible model-based geographic network OD matrix**, suitable for studies requiring reproducible relative road/ferry distances under stated assumptions. It does not demonstrate physical access to private or closed roads, live ferry service, or population within a barangay. The model intentionally **does not use dasymetric population grids or modify existing graph topology to cure apparent disconnections**. A six-barangay read-only consistency study showed that the nearest snapped node may be in a small component while major road components also intersect the polygon; these observations document a limitation, not proof of an incorrect assignment.
+
+**Report separately:** (1) the transport and geometry source/vintage; (2) the medoid selection mode and site cap; (3) the conditional distance matrix; (4) reachability and origin coverage; (5) disconnected network pairs and known approximation limits. See [literature](literature.md) for the distinction between canonical methods and the project's own representation policy.
+
+## 8. v56 output discovery and one-run default
+
+The default `--level all` computes the same town-site routing once, then writes **town**, **province-equivalent** and **region** matrices from its saved population-pair totals. The CLI prints full paths to `distance_matrix_km.csv`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, `units.csv`, and the `latest_run.json` pointer for each requested tier. Use `--level town`, `--level province`, or `--level region` to export only a particular tier. `--geometry-source latest` selects only the exact hash-verified local points used by the most recent completed run, never a guessed replacement.

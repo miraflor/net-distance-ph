@@ -403,16 +403,16 @@ def add_run_arguments(p):
     p.add_argument("--workspace", type=Path, default=Path.home() / "Documents" / "net-distance-ph", help="existing graph workspace")
     p.add_argument("--dataset-dir", type=Path, help="folder with units.csv and barangay_population.csv (default: bundled normalized tables)")
     p.add_argument("--points", type=Path, help="optional barangay points.csv with psgc_code,lon,lat; otherwise auto-discover/download pinned GIS geometry")
-    p.add_argument("--level", choices=("town", "province", "province-equivalent", "region", "all"), default="town",
-                   help="town (default); province/province-equivalent (province + nonprovincial peers); region; all")
+    p.add_argument("--level", choices=("town", "province", "province-equivalent", "region", "all"), default="all",
+                   help="all three (default); town; province/province-equivalent (province + nonprovincial peers); region")
     p.add_argument("--median-selection", choices=("balanced", "one"), default="balanced",
                    help="balanced: automatic component-wise k via normalized access/complexity tradeoff (default); one: legacy 1-median per component")
     p.add_argument("--max-mean-access-km", type=float, default=None,
                    help="optional explicit mean-access budget (km); overrides balanced selection and uses legacy budgeted k-median")
     p.add_argument("--max-sites-per-town", type=int, default=12)
     p.add_argument("--max-snap-km", type=float, default=25.0)
-    p.add_argument("--geometry-source", choices=("auto","ocha","faeldon"), default="ocha",
-                   help="OCHA only (default); choose auto for explicit OCHA-to-faeldon fallback")
+    p.add_argument("--geometry-source", choices=("latest","auto","ocha","faeldon"), default="latest",
+                   help="latest (default): reuse SHA-verified geometry of last run, else OCHA; explicit faeldon/ocha/auto override")
     p.add_argument("--unsnappable-policy",choices=("exclude","error"),default="exclude",
                    help="audit and exclude origins beyond snap radius, or fail strictly")
     p.add_argument("--missing-geometry-policy",choices=("exclude","error"),default="exclude",

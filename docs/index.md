@@ -1,72 +1,77 @@
+<!-- v55-methods-documentation -->
 # net-distance-ph
 
-## Distances across an archipelago, without pretending the sea is a road
+**Road-and-ferry network distance matrices for Philippine administrative areas**, with a **population-weighted town-to-town origin–destination (OD) matrix as the default research product**.
 
-`net-distance-ph` computes **shortest-path distance, in kilometres, between
-Philippine city and municipality reference points** through a combined network
-of road polylines and mapped ferry routes. It is a batch research pipeline,
-not a navigation application, travel-time predictor, or official dataset.
+The project has **two separate, supported computational workflows**. Their distances have different definitions and must not be interchanged.
 
-The Q2 2026 official PSGC roster lists **1,642 cities and municipalities**. This is an input target, **not** evidence that every locality has been connected or that a national matrix has been computed. See [run status](run-status.md).
+| | Default population-weighted OD workflow | Legacy locality-centroid workflow |
+| --- | --- | --- |
+| Command | `net-distance-ph population-weighted` | `net-distance-ph run ...` or `python run.py ...` |
+| Origin data | Positive-population barangay polygon representative points, snapped to a network | One locality reference point per city/municipality |
+| Representation | Population-weighted, connected-component-aware network **k-medians** | Single locality point |
+| Primary output | Conditional population-weighted mean of **representative-site shortest-path distances** | Shortest-path distance between locality reference nodes, with optional snap connectors |
+| Default output levels | **Town, province-equivalent and region (one run)** | Town/locality centroid matrix |
+| Optional one-tier selection | `--level town`, `--level province`, `--level region` | Independent boundary-level variants |
+| Disconnected origins | Separate populations retained; reachability reported separately | Unreachable modeled graph nodes produce `inf` in completed rows |
 
-!!! info "In one sentence"
-    The distance from locality A to locality B is the sum of the minimum
-    traversable road/ferry edge lengths between their attached network nodes,
-    plus (by default) their geometric centroid-to-network connectors.
+## Primary workflow: population-weighted town OD
 
-```mermaid
-flowchart LR
-  A[OSM-derived road shapefile] --> G[Combined weighted graph]
-  B[OSM-derived ferry shapefile] --> G
-  C[PSGC-matched locality origin points] --> S[Point attachment]
-  G --> S
-  S --> R[Exact node contraction]
-  R --> M[Resumable Dijkstra searches]
-  M --> O[Distance matrix + row IDs]
-  M --> V[Verification vs full graph]
+```powershell
+# Export all three matrices from one population-weighted routing run:
+net-distance-ph population-weighted
+
+# Pin the existing verified Faeldon geometry explicitly, if desired:
+net-distance-ph population-weighted --geometry-source faeldon --no-auto-geometry
 ```
 
-### What it produces
+The first command uses the installed defaults **`--level all`** and **`--median-selection balanced`**. When a completed run exists, the default reuses its **SHA-256-verified cached geometry**; otherwise a new run uses the historical OCHA policy. Geometry provenance changes results; choose and record one source. See [Getting started](getting-started.md) and [Population-weighted methodology](population_weighted.md).
 
-| Deliverable | Meaning |
-| --- | --- |
-| `distance_matrix_km.npy` | Numerical float64 matrix; `inf` for absent or not-yet-resolved distances |
-| `distance_matrix_km.csv` | Human-readable distances, labelled with original locality IDs |
-| `towns.csv` | Exact row order, IDs, names, points and snapping diagnostics |
-| `row_validity_radius_km.npy` | How far each row's computation is complete |
-| `matrix_report.json` | Completion, reachability and symmetry diagnostics |
-| `source_manifest.json` | Input shapefile SHA-256 hashes, geometry settings, and core identity |
-| `verification.txt` | Numerical checks against the modeled graph |
+```mermaid
+flowchart TD
+  A[PSA barangay populations + Q2 2026 PSGC hierarchy] --> B[Barangay polygon representative points]
+  O[OSM-derived roads and ferries] --> G[Undirected distance-weighted graph]
+  B --> S[Snapping + origin coverage audit]
+  G --> S
+  S --> K[Within-town, component-aware network k-medians]
+  K --> R[Representative-site shortest paths]
+  R --> T[Town conditional-distance + reachability matrices]
+  T --> P[Province-equivalent aggregation]
+  T --> Q[Region aggregation]
+```
 
-### What makes it different from a straight-line distance matrix?
+For a town pair, the distance is a **population-pair-weighted conditional mean among reachable selected representative sites**, not the shortest connection between two town centroids, not the minimum possible trip, and not an observed trip length. `reachable_pair_probability.npy` measures the fraction of **all census population-pair mass** supported by the modeled reachable representatives; missing geometry and unsnappable origins remain in that denominator. A zero-reachability pair has `inf` distance. Within-town diagonals can be positive.
 
-A geodesic distance ignores road detours and island crossings. This pipeline
-traces geometry on the **connected graph**, making the resulting quantity
-network distance. On the other hand, it does not know travel times,
-road restrictions, schedules, traffic or whether a ferry actually operates.
+## Optional upper administrative levels
 
-### Documentation guide
+The `--level province` selection writes to `province_equivalent/`, **not** the historical province-only output. Each official province is a unit, and a city/municipality without a published province parent is a separate peer unit. This includes province-less municipalities as well as cities; the input hierarchy does **not** classify nonprovincial cities into HUC versus independent-component-city legal types. Each official town belongs to exactly one upper-tier unit. All outputs ultimately use the same barangay population weights.
 
-- [Getting started](getting-started.md) — install, inspect, calculate.
-- [Run status](run-status.md) — verified execution history and outstanding checks.
-- [Inputs and identifiers](inputs.md) — required schemas, CRS and PSGC caution.
-- [Methodology](methodology.md) — exact graph construction and algorithms.
-- [Pipeline](pipeline.md) — stages, flags and crash recovery.
-- [Outputs](outputs.md) — safe use of matrix cells and partial results.
-- [Validation](validation.md) — tests, verification and known limitations.
-- [Independent boundary generation](boundaries.md) — official upstream sources, polygon matching, audit, and representative points.
-- [Independent road and ferry extraction](transport.md) — OSM PBF downloads, tag rules, ferry relations, and source auditing.
-- [Reproducibility](reproducibility.md) — snapshots, citations and publication.
-- [FAQ](faq.md) — common interpretation questions.
+## Legacy centroid workflow
 
-### Intended users
+The original centroid pipeline remains available and separate:
 
-Researchers studying regional accessibility, spatial interaction, network
-proximity and geographic frictions; analysts who need consistent spatial
-weights based on a network, rather than Euclidean distance; and GIS engineers
-who want an auditable national matrix. It is still the researcher's duty to
-justify whether geometric centroid travel distance measures the relevant
-spatial process.
+```powershell
+net-distance-ph run --until connectivity --verbose
+# See Running the legacy pipeline for the matrix and verification stages.
+```
 
-!!! warning "No nationally verified outputs"
-    The algorithms and synthetic fixtures do not establish nationwide route coverage. Complete source preparation, graph connectivity testing, and physical route auditing first.
+Its outputs have different file paths, diagonal conventions, and connector treatment. Do not combine a legacy centroid matrix with population-weighted reachability or claim they measure the same estimand.
+
+## Interpretation and limitations
+
+- The graph is an **undirected** mathematical model with geodesic road/ferry edge lengths. It does not encode traffic, ferry schedules, operating status, one-way or turn restrictions, or guaranteed legal access.
+- A barangay is represented by **one interior polygon point** before network-median selection, not a measured distribution of residents. Several distinct graph components can lie inside the same barangay; all its modeled population follows its single snapped origin.
+- Graph reduction and route-verification tests assess distances on the **constructed graph**, not real-world access correctness.
+- Source datasets, graph snapshots and full national matrices are **not bundled with this repository**. Maintainer-local reports do not independently certify the operating national network; see [Run status](run-status.md).
+
+## Documentation guide
+
+- [Population-weighted method, equations and defaults](population_weighted.md) — authoritative description of the primary workflow.
+- [Outputs and reachability interpretation](outputs.md) — read the `.npy`, `.csv`, and manifests correctly.
+- [Literature and methods provenance](literature.md) — canonical foundations versus project-specific design.
+- [Getting started](getting-started.md) and [CLI](cli.md) — executable commands and policies.
+- [Legacy centroid methodology](methodology.md) and [legacy pipeline](pipeline.md).
+- [Inputs](inputs.md), [validation](validation.md), [reproducibility](reproducibility.md), and [run status](run-status.md).
+- [Road/ferry extraction](transport.md), [boundaries](psgc_aligned_boundaries.md), and [FAQ](faq.md).
+
+**CLI output locations:** The command prints absolute paths for each distance matrix, the reachability matrix, the row-ID `units.csv` file, and `latest_run.json`.

@@ -3,13 +3,15 @@ site_url: https://miraflor.github.io/net-distance-ph/
 repo_url: https://github.com/miraflor/net-distance-ph
 repo_name: miraflor/net-distance-ph
 edit_uri: edit/main/docs/
-site_description: Reproducible road-and-ferry shortest-path distance matrices for Philippine municipalities and cities
+site_description: Three population-weighted Philippine OD matrices (town, province-equivalent and region) from one road-and-ferry routing run
 site_author: Project contributors
 nav:
   - Overview: index.md
   - Getting started: getting-started.md
   - Input data & identifiers: inputs.md
-  - Methodology: methodology.md
+  - Primary population-weighted method: population_weighted.md
+  - Literature and method provenance: literature.md
+  - Legacy centroid methodology: methodology.md
   - Running the pipeline: pipeline.md
   - Boundary levels: boundary_levels.md
   - Unified CLI: cli.md
@@ -65,3 +67,5 @@ markdown_extensions:
       generic: true
 extra_javascript:
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+# <!-- v55-methods-documentation -->

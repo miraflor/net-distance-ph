@@ -1,5 +1,9 @@
 # Output contract and interpretation
 
+<!-- v55-methods-documentation -->
+
+**The main section below documents the separate legacy centroid outputs.** The default `net-distance-ph population-weighted` outputs are documented under [Primary population-weighted OD output](#primary-population-weighted-od-output-distinct-from-the-centroid-out-files-above). Their distance and diagonal definitions are different.
+
 The program creates files in `out/` (or `--out`). **The row order is determined
 by the input locality point shapefile**, never by PSGC numerical sorting.
 
@@ -93,3 +97,33 @@ are genuinely bidirectional. Its values are **geometry-weighted shortest paths**
 not observed distances traveled by individual vehicles. The presence of a link
 in the graph means the extracted geometry connects, not necessarily that a
 person can traverse it on a given date or at a given time.
+
+## Primary population-weighted OD output (distinct from the centroid `out/` files above)
+
+The installed default `net-distance-ph population-weighted` exports **all three levels** to:
+
+```text
+~/Documents/net-distance-ph/variants/population_weighted/output/<routing-hash-prefix>/town/
+```
+
+The default additionally produces `province_equivalent/` (not the historical `province/`) and `region/`. `--level town|province|region` can select just one. These exports share **town-level routing totals**, with no separate higher-level medoid selection. `latest_run.json` describes only the levels requested in the latest invocation.
+
+| File in each population-weighted level | Meaning |
+| --- | --- |
+| `distance_matrix_km.npy` / `.csv` | **Conditional** weighted mean of shortest **representative road-node** distances for site pairs with a route, in km; `inf` if no pairs are reachable; CSV renders nonfinite as blank |
+| `reachable_pair_probability.npy` | Modeled reachable representative population-pair mass divided by **full** census population-pair mass (including unmodeled demand) |
+| `population_per_unit.npy` | Complete input population at that administrative level |
+| `modeled_population_per_unit.npy` | Population with successfully snapped and represented origins |
+| `origin_population_coverage.npy` | Modeled / full population |
+| `mean_representation_access_km.npy` | Mean population-weighted distance from original origin to selected representative, including origin-to-road snap offsets |
+| `distance_approximation_bound_km.npy` | Model-computed representation-error diagnostic, **not** a verified real-world trip-distance error bound |
+| `units.csv` | Exact row order and PSGC codes; province-equivalent adds `unit_type` (`province`, `nonprovincial_city`, `nonprovincial_municipality`) |
+| `manifest.json` | Model, input, graph, routing, and population coverage metadata |
+
+For towns A and B, the code accumulates `N_AB = sum(reachable sites s,t) p_s p_t d_G(s,t)` and `R_AB = sum(reachable sites s,t) p_s p_t`. It reports `D_AB=N_AB/R_AB` when `R_AB>0`, otherwise `inf`. Reachability is `Q_AB=R_AB/(P_A P_B)`, with **full input census** P. At the upper tiers it sums the unnormalized town `N` and `R` first; it does **not** take a simple average of town distances.
+
+**Unlike the legacy centroid matrix**, the population-weighted diagonal may be positive, and `D_AB` **excludes** barangay snap connectors and demand-to-median access. Unmodeled origins are *not* considered proven disconnected. There is no radius-limited incomplete-wave ambiguity in a **finished** population-weighted output; the legacy `row_validity_radius_km.npy` contract applies to the separate centroid pipeline only. See [exact mathematical definitions](population_weighted.md#5-exactly-what-the-town-matrix-measures).
+
+### v56: where the three population-weighted matrices go
+
+The default `net-distance-ph population-weighted` writes **all three** levels under `~/Documents/net-distance-ph/variants/population_weighted/output/<routing-hash-prefix>/`: `town/`, `province_equivalent/`, and `region/`. Each has `distance_matrix_km.csv`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, `units.csv`, and `manifest.json`. The command **prints the absolute directory and filenames for each level** and a `LATEST OUTPUT INDEX` path. The durable `variants/population_weighted/output/latest_run.json` contains `matrix_outputs` with these absolute paths. No assumption about the current working directory is needed.

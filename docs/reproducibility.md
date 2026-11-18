@@ -60,8 +60,7 @@ that distributing code automatically gives permission to distribute data.
 
 ## GitHub Pages deployment
 
-1. Create a new repository named **`net-distance-ph`**, then push this
-   source tree. Do not upload the old `work/`, `out/` or private input folder.
+1. Use the existing **`miraflor/net-distance-ph`** repository, and push the documentation to its deployment branch after review. Do not upload the old `work/`, `out/` or private input folder.
 2. The site and repository URLs in `mkdocs.yml` target `miraflor/net-distance-ph`. Update them only if you publish under a different owner or repository.
 3. In repository **Settings → Pages → Build and deployment**, choose
    **GitHub Actions** as the source.
@@ -69,8 +68,7 @@ that distributing code automatically gives permission to distribute data.
    Actions. The workflow builds MkDocs Material and publishes `site/`.
 5. Review the rendered site, its links and the release's data provenance.
 
-GitHub shows the published Pages URL after successful deployment; the site has
-not been published by this source package.
+The site at `https://miraflor.github.io/net-distance-ph/` reflects the last successful **`main`-branch** Pages workflow. A change on a feature branch does not publish until merged into `main` and deployed.
 
 For local preview:
 
@@ -98,3 +96,13 @@ particularly review OSM's ODbL when considering derived network exports.
 - [ ] Matrices are not distributed before the applicable data license review.
 - [ ] `mkdocs.yml` is pointed to the actual repository.
 - [ ] MIT software license is approved by the publisher and dataset attribution is complete.
+
+<!-- v55-methods-documentation -->
+
+## Population-weighted matrix reproducibility (primary workflow)
+
+In addition to the legacy shapefile graph provenance, retain: **Q2 2026 PSGC code list**, **2024 barangay population** table and input hashes; chosen OCHA/Faeldon/custom geometry source with code crosswalk and polygon-point extraction policy; saved snapped origins and missing-geometry/unsnappable population audits; network graph and population-specific core fingerprints; selection mode (`balanced` by default, `one` or budget explicitly), site-count cap and optional access budget; `selection_policy.json`, `selection_audit.csv`, `representative_sites.csv`, and routing checkpoint/manifest; level-specific `units.csv`, `population_per_unit.npy`, `modeled_population_per_unit.npy`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, and the exact code commit.
+
+To reproduce an old Faeldon-based run from cached files, provide `--geometry-source faeldon --no-auto-geometry` explicitly. A bare invocation reuses the **SHA-256-verified source of the latest completed run**, or OCHA if no prior run exists. Output `--level` defaults to **`all`** (town + province equivalents + region); choose `town`, `province`, or `region` to restrict the exported tiers; different levels aggregate the **same** town routing pair totals without independent site selection.
+
+Report the distinction between (i) connected-component-aware medoid-node OD distance **conditional on a route** and (ii) the companion census-pair reachability fraction. Both the balancing formula and the total within-town site cap are **project assumptions**; cite [literature and implementation distinctions](literature.md) rather than attributing the exact k-selector to a classical paper. Do not publish local run reports as independently reproduced national travel behavior.

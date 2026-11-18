@@ -78,3 +78,34 @@ large or licensed datasets.
 ### How can I test whether every town is reachable?
 
 After building the graph, verify full official PSGC coverage and snapping, then test whether all town-attached graph nodes share a single connected component. Real-world ferry and road availability still require independent auditing.
+
+<!-- v55-methods-documentation -->
+## Population-weighted workflow questions
+
+### Which distance matrix does `net-distance-ph population-weighted` generate by default?
+
+**Town, province-equivalent and region**, all using **balanced connected-component-aware network k-medians** and one common routing calculation. Use `--level town`, `--level province`, or `--level region` to request just one. The legacy centroid pipeline has different commands and semantics. See [the population-weighted method](population_weighted.md).
+
+### Are province-equivalent distances weighted by barangay population?
+
+**Yes.** The initial medoid site weights are sums of official barangay populations. Town OD pairs contribute reachable population-pair **numerators and denominators**, which are summed across province-equivalent/region membership before division. This is **not** a simple mean of town distances, and it is not a new province-centroid route calculation.
+
+### Why does a town or province-equivalent have a nonzero diagonal?
+
+It is a weighted expectation over independently chosen representative sites in the same administrative area, **conditional on a modeled route**, rather than the distance from one fixed centroid to itself. A conventional zero diagonal should not be imposed without changing the estimand.
+
+### What if some barangays have no geometry or cannot be snapped?
+
+Their **full census population stays in the denominator**; they have no fabricated road path. `origin_population_coverage.npy` distinguishes that missing origin representation from actual graph disconnection. `reachable_pair_probability.npy` measures the share of census-pair mass whose representatives have a proven modeled route, not observed trip likelihood.
+
+### Is balanced k selection a standard off-the-shelf optimal-k formula?
+
+No. The **network p-median problem** is canonical, but the implemented normalized access-loss plus extra-site-fraction balancing rule is **project-specific**. The k=1 candidate-demand-node median is exact; greedy and 1-swap solutions for larger k are heuristic, and a per-town cap applies across all disconnected components. See [methodology](population_weighted.md#4-connected-component-aware-network-k-medians) and [literature](literature.md).
+
+### Are all 43 nonprovincial towns necessarily HUCs/independent component cities?
+
+No. The existing normalized input distinguishes missing province parents and city versus municipality, **not** a verified legal subclass. Province-equivalent groups include province-less municipalities (for example Pateros and SGA municipalities) as separate peers. The software intentionally does not infer HUC or ICC labels from missing parents.
+
+### Where are the default population-weighted matrices?
+
+The same `net-distance-ph population-weighted` run exports **town, province-equivalent and region** matrices. The last console block reports all three exact directories, the distance CSV/NumPy, reachability matrix, unit IDs and the index `latest_run.json`. To select one tier, add `--level town|province|region`. To reuse the exact polygons from the prior successful run, omit `--geometry-source` (the new `latest` policy); explicit providers are still supported.

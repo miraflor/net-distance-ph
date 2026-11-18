@@ -25,6 +25,7 @@ from .population_weighted import (SCHEMA, digest, write_json, read_points, valid
     select_sites, select_sites_balanced, combine_group_matrices, finish_means, save_csv_matrix, filter_origin_rows)
 from .population_data import load_plain_dataset, export_bundled_defaults
 from .province_equivalent import build_province_equivalents
+from .output_selection import previous_geometry, output_manifest, print_output_locations
 
 
 # Population-weighted logging instrumentation (v44)
@@ -660,9 +661,17 @@ def run(args):
         pop_meta={**pop_meta,"province_crosswalk_sha256":crosswalk_sha}
         print(f"Validated geographic province crosswalk for {len(crosswalk)} towns",flush=True)
     from .population_geometry import discover_points
+    selected_geometry = getattr(args, "geometry_source", "latest")
+    requested_points = args.points
+    if requested_points is None and selected_geometry == "latest":
+        requested_points = previous_geometry(repo, workspace, home)
+        if requested_points is None:
+            print("GEOMETRY: no previous published run; using the historical OCHA-first-run policy", flush=True)
+    # The geometry provider receives only its established source choices.
+    discovery_policy = "ocha" if selected_geometry == "latest" else selected_geometry
     points_path=_pw_time_call("discover barangay geometry", discover_points, workspace,dataset_dir,roster,
-        requested=args.points,auto_geometry=not getattr(args,"no_auto_geometry",False),
-        source=getattr(args,"geometry_source","ocha"))
+        requested=requested_points,auto_geometry=not getattr(args,"no_auto_geometry",False),
+        source=discovery_policy)
     points=_pw_time_call("read barangay geometry", read_points, points_path)
     full_population_rows=rows
     rows,coordinates,missing_geometry=_pw_time_call("validate geometry coverage", filter_origin_rows,
@@ -741,10 +750,11 @@ def run(args):
         raise ValueError(f"Town-to-region mapping incomplete: {[towns[i] for i in np.flatnonzero(reg_map<0)][:10]}")
     check=verify_original_graph(workspace,core_dir,sites,args.verify_sites)
     write_json(output_run/"independent_original_graph_verification.json",check)
-    # Default is town-only. Higher-level matrices aggregate the SAME completed
-    # town numerator/denominator; no separate routing or medoid selection.
+    # The default exports all three levels; every upper tier aggregates the
+    # SAME town numerator/denominator, never a separate routing run.
+    output_paths = {}
     if args.level in {"all","town"}:
-        _save_level(home,"town",town_units,np.arange(len(towns)),town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,core_key=key,
+        output_paths["town"] = _save_level(home,"town",town_units,np.arange(len(towns)),town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,core_key=key,
                     full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
     selected_levels=[]
     if args.level in {"all","town"}:
@@ -755,19 +765,25 @@ def run(args):
             raise ValueError("Province-equivalent units do not cover every town")
         print(f"PROVINCE EQUIVALENTS: {len(units)} units; "
               f"{pe_meta['unit_types']}; {len(towns)} towns included, no omissions",flush=True)
-        _save_level(home,"province_equivalent",units,pe_map,town_num,town_den,town_pop,sites,pop_meta,
+        output_paths["province_equivalent"] = _save_level(home,"province_equivalent",units,pe_map,town_num,town_den,town_pop,sites,pop_meta,
                     route_hash=route_hash,core_key=key,full_town_pop=full_town_pop,
                     snap_audit=snap_audit,town_codes=towns)
         write_json(output_run/"province_equivalent"/"administrative_definition.json",pe_meta)
         selected_levels.append("province_equivalent")
     if args.level in {"all","region"}:
-        _save_level(home,"region",[{"code":c,"name":roster[c]["name"]} for c in region_codes],
+        output_paths["region"] = _save_level(home,"region",[{"code":c,"name":roster[c]["name"]} for c in region_codes],
                     reg_map,town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,
                     core_key=key,full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
         selected_levels.append("region")
-    write_json(home/"output"/"latest_run.json",{"schema":SCHEMA,"routing_hash":route_hash,
+    if set(selected_levels) != set(output_paths):
+        raise ValueError("Requested output levels and completed matrix paths disagree")
+    locations = output_manifest(output_paths)  # refuse to claim missing files
+    latest_file = home/"output"/"latest_run.json"
+    write_json(latest_file,{"schema":SCHEMA,"routing_hash":route_hash,
         "directory":str(output_run),"levels": selected_levels,
         "median_selection":selection_mode,"selection_audit_csv":str(selection_audit),
-        "verification_file":str(output_run/"independent_original_graph_verification.json")})
-    print("COMPLETE: baseline centroid matrix, selected graph releases and original raw datasets unchanged")
+        "verification_file":str(output_run/"independent_original_graph_verification.json"),
+        "matrix_outputs":locations})
+    print_output_locations(locations, latest_file)
+    print("COMPLETE: baseline centroid matrix, selected graph releases and original raw datasets unchanged", flush=True)
     return 0

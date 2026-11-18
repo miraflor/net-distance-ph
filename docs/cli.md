@@ -1,5 +1,9 @@
 # Unified command-line interface
 
+<!-- v55-methods-documentation -->
+
+**Population-weighted default:** `net-distance-ph population-weighted` exports **town, province-equivalent, and region together** with **balanced component-aware k-medians**. Specific-level selections `--level town`, `--level province` (province equivalents), and `--level region` are optional and use the same town routing computations. See [population-weighted definitions](population_weighted.md), [outputs](outputs.md) and [literature](literature.md). The `net-distance-ph run` command is the separate baseline centroid pipeline.
+
 **Default behavior:** `net-distance-ph run --until connectivity --verbose` now
 validates and publishes the checksum-pinned PSGC-aligned town source automatically.
 Use `--boundary-level {town,city,municipality,huc,province,region,barangay}`
@@ -374,23 +378,23 @@ for *measurement only* and explicitly flagged. For other geometry policies
 (e.g. OCHA, custom points), this implementation refuses rather than silently
 substitute a different polygon release.
 
-## v54: town default and exhaustive province-equivalent layer
+## v54–v56: province-equivalent layer and consolidated default
 
-`net-distance-ph population-weighted` now defaults to **`--level town`** and
+`net-distance-ph population-weighted` now defaults to **`--level all`** and
 **`--median-selection balanced`**. Balanced selection is the existing
 component-aware network k-medians; it does not force connections between
-road/ferry components. The default exports only the town-to-town distance
-and population-pair reachability matrices. All work is derived from the same
+road/ferry components. The default exports town, province-equivalent and region
+distance and population-pair reachability matrices in one run. All work is derived from the same
 saved graph, barangay points, and official barangay counts.
 
 Explicit output selection:
 
 ```powershell
-net-distance-ph population-weighted                          # town only
+net-distance-ph population-weighted                          # ALL THREE matrices
 net-distance-ph population-weighted --level province           # province equivalents only
 net-distance-ph population-weighted --level province-equivalent # synonym
 net-distance-ph population-weighted --level region             # region only
-net-distance-ph population-weighted --level all                # town + province equivalents + region
+net-distance-ph population-weighted --level town               # town only
 ```
 
 `--level province` is a compatibility alias, but **it no longer exports a
@@ -412,3 +416,7 @@ reachability accounting is conservative. They do not cause separate graph
 construction or separate intersite shortest-path searches. The output pointer
 `latest_run.json` lists only the levels requested in that invocation.
 This CLI change does not run or modify any existing computation by itself.
+
+### v56: exact output locations and geometry reuse
+
+On successful completion, the CLI prints the full **OUTPUT [TOWN]**, **OUTPUT [PROVINCE_EQUIVALENT]**, **OUTPUT [REGION]** directories, each distance CSV and NPY, reachability NPY, `units.csv` row index, and **LATEST OUTPUT INDEX** (`latest_run.json`). The index also contains a `matrix_outputs` object with these file paths. Omitted `--geometry-source` defaults to `latest`: reuse the exact SHA-256-verified cached source of the last completed run; if there is no prior run, use OCHA as before. Explicit `--geometry-source faeldon|ocha|auto` and `--points PATH` take precedence. An invalid prior-run source is an error, not grounds for silently downloading a replacement.

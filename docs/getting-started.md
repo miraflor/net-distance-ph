@@ -1,5 +1,26 @@
 # Getting started
 
+<!-- v55-methods-documentation -->
+
+## Primary: population-weighted town distance matrix
+
+The primary research command is `net-distance-ph population-weighted`, which defaults to **all three matrices (town, province-equivalent and region)** and **balanced connected-component-aware network k-medians**. It needs a compatible stage-1 graph and chosen barangay geometry in the workspace. From an existing previously completed Faeldon run:
+
+```powershell
+net-distance-ph population-weighted
+# Equivalently, pin existing Faeldon points explicitly:
+net-distance-ph population-weighted --geometry-source faeldon --no-auto-geometry
+# Optional only one matrix:
+net-distance-ph population-weighted --level town
+```
+
+A bare invocation first reuses the **exact SHA-256-verified geometry from the latest completed population run**. With no earlier run, it uses the original OCHA-first-run policy. For a first build, prepare the road/ferry graph with `net-distance-ph run --until graph` and ensure the selected population geometry source is available; do not disable automatic geometry acquisition unless it is already cached. See [the primary method](population_weighted.md) for precise inputs, limitations, and formulas.
+
+## Legacy centroid pipeline setup
+
+The commands in the following sections describe the separate `run.py` and `net-distance-ph run` baseline pipeline. Its `out/` files are **not** the population-weighted OD output.
+
+
 ## Requirements
 
 Python 3.11+ with NumPy and SciPy. `pyproj` is recommended for geodesic edge
@@ -20,7 +41,7 @@ Dependencies are specified in
 `pyproject.toml`. On Windows, PowerShell accepts the same quoted pip extras
 and commands.
 
-## Automatic source preparation (recommended)
+## Legacy centroid automatic source preparation
 
 The PSA Q2 2026 workbook and derived JSON are stored in the repository
 under `reference/psgc/`. The boundary builder reads that JSON by default;
@@ -145,3 +166,5 @@ That test generates a miniature synthetic archipelago with road grids,
 offshore ferry endpoints and an isolated island, executes the full CLI, and
 compares its matrix against unreduced Dijkstra results. It does not access any separate GIS project
 or download any source data.
+
+The completed command prints **OUTPUT [TOWN]**, **OUTPUT [PROVINCE_EQUIVALENT]**, and **OUTPUT [REGION]** with absolute paths and the location of `latest_run.json`. All three share the same graph, k-medians and routing calculation.

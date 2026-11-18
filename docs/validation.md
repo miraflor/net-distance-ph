@@ -118,3 +118,15 @@ unreachability into artificial proximity.
 4. Run the complete CLI regression suite and final `verify` stage.
 5. Record parameter values, Python package versions and hardware.
 6. State whether the result is network distance or generalized equivalent cost.
+
+<!-- v55-methods-documentation -->
+
+## Population-weighted validation and scientific limits
+
+The primary `population-weighted` pipeline is tested separately from the legacy centroid pipeline. Its checks cover population conservation across weighted medoid assignments, component-wise disconnection preservation, exact candidate-node one-median selection, deterministic greedy/1-swap k-median heuristics, normalized balanced k-selection accounting, conditional reachable-pair aggregation, and **province-equivalent membership without exclusions**. The relevant unit tests include `tests/test_population_weighted.py`, `tests/test_province_equivalent_v54.py` and the geographic/topology audit regression suite.
+
+Maintainer-local execution evidence includes original-versus-reduced component lineage checks and v53 polygon/network review of six urban barangays. These do **not** verify legal access or operational ferry service. In particular, a barangay's entire census population is assigned to one polygon representative point, which may snap to a small disconnected component even though other road components intersect that polygon. This is a **known origin approximation**, not an excuse to add synthetic network edges or move population to the largest component.
+
+Population-weighted `distance_matrix_km.npy` **excludes** the original origin-to-road and demand-to-median access distances; these are accounted for in representation diagnostics. The main distance is a conditional mean over reachable selected medoid sites and **can have a positive diagonal**. Reachability includes the **full** census population denominator, including missing and unsnappable origins. Consequently, neither a high measured reachability nor agreement with unreduced Dijkstra alone establishes real-world accessibility.
+
+See [full definitions](population_weighted.md), [literature](literature.md) and [execution status](run-status.md).

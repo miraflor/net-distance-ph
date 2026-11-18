@@ -330,7 +330,7 @@ def test_filter_origin_rows_preserves_missing_population_and_alignment():
     assert sum(r['population'] for r in missing)==200
     assert sum(r['population'] for r in records)==600
     assert parse_args([]).missing_geometry_policy=='exclude'
-    assert parse_args([]).geometry_source=='ocha'
+    assert parse_args([]).geometry_source=='latest'
 
 
 def test_filter_origin_rows_errors_if_everything_missing_or_strict():

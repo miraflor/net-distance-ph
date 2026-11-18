@@ -1,8 +1,10 @@
 # net-distance-ph
 
+<!-- v55-methods-documentation -->
+
 For a PSGC-aligned replacement to the older geoBoundaries ADM3 polygons, use `net-distance-ph boundaries --download` to validate the pinned 1,642-locality source, then `net-distance-ph boundaries --download --publish` to explicitly publish one Manila city polygon and the eight SGA municipalities. See [PSGC-aligned boundaries](docs/psgc_aligned_boundaries.md).
 
-**Reproducible road-and-ferry shortest-path distances between Philippine cities and municipalities.**
+**Two reproducible OD workflows: primary population-weighted town-to-town distance and a separate legacy locality-centroid matrix.**
 
 The project builds an undirected graph from independently prepared or
 user-supplied OpenStreetMap road and ferry-route shapefiles, attaches locality reference points, contracts the
@@ -10,14 +12,38 @@ network without changing shortest-path distances, and computes a square matrix
 in kilometres. It is designed for national-scale runs with resumable stages,
 clear row/column identifiers, and numerical verification against the corresponding unreduced graph.
 
-**National-run status:** No completed nationwide distance matrix or nationwide connectivity result has been established by a user-confirmed `net-distance-ph` run. Inherited numerical results are excluded. See [Run status](docs/run-status.md).
+**National-run status:** Maintainer-local national population-weighted runs and geography checks have been reported; national matrices and source snapshots are not distributed with this repository or independently certified as real-world ferry accessibility. See [Run status](docs/run-status.md).
 
 **[Documentation (GitHub Pages after deployment)](https://miraflor.github.io/net-distance-ph/)** ·
 [Methodology](docs/methodology.md) · [Inputs](docs/inputs.md) ·
 [Independent boundary generation](docs/boundaries.md) ·
 [Independent transport extraction](docs/transport.md) · [Validation](docs/validation.md)
 
-## Quick start
+## Primary workflow: population-weighted town-to-town OD
+
+**The primary research command is `net-distance-ph population-weighted`.** The default now exports **town, province-equivalent, and region** (`--level all`) in one run, with **balanced, connected-component-aware network k-medians** (`--median-selection balanced`). Upper tiers aggregate the same town-routing totals, **not** separate graph constructions.
+
+```powershell
+# The default exports all three matrices and reuses exact SHA-256-verified geometry
+# from the last completed run, if one exists:
+net-distance-ph population-weighted
+
+# To pin the known Faeldon source explicitly (no geometry download):
+net-distance-ph population-weighted --geometry-source faeldon --no-auto-geometry
+
+# Or request only one output tier:
+net-distance-ph population-weighted --level town
+```
+
+Without an explicit geometry choice, an existing completed run supplies its **exact hash-verified polygon geometry**; otherwise a fresh run retains the historical OCHA source policy. `--geometry-source faeldon|ocha|auto` overrides that reuse rule. The population inputs are 2024 barangay counts linked to the Q2 2026 PSGC hierarchy. Each positive-population barangay contributes one interior polygon representative point, which is snapped to the existing road/ferry network. Disconnected graph components are **preserved**: at least one weighted network median is chosen per populated component, and extra medoids are allocated by a deterministic, **project-defined** normalized access/complexity criterion (subject to the per-town cap). Site-selection heuristics do not guarantee global k-median optimality.
+
+The returned **distance** is the population-pair-weighted mean of **reachable selected representative-node shortest paths**, conditional on a modeled connection. It **does not include** the origin-to-network snap or the origin-to-median representation-access distance, which are recorded separately. The companion reachability matrix divides modeled reachable population-pair mass by the **full** census population-pair mass, including unmodeled origins. An `inf` distance means no modeled representative-site pair was demonstrably reachable, **not** necessarily that travel is impossible in the real world; within-unit diagonals need not be zero.
+
+`--level province` produces a **province-equivalent** matrix (`province_equivalent/`): each published province plus each city or municipality without a province parent as a peer OD unit. This exhaustively groups towns without guessing HUC versus ICC legal labels from absent parent fields. The **same barangay populations** underlie all levels; aggregation sums unnormalized reachable-pair totals before taking a ratio. Old `province/` outputs are left untouched.
+
+**Read before using the matrices:** [complete population-weighted methodology](docs/population_weighted.md), [output semantics](docs/outputs.md), [foundational literature and novel choices](docs/literature.md), [validation](docs/validation.md), and [run status](docs/run-status.md). The legacy centroid pipeline, described below, has **a different distance definition** and remains available separately.
+
+## Legacy centroid quick start
 
 The installed pipeline now **automatically validates and selects** pinned PSGC-aligned
 municipal boundaries on the first run; no separate `boundaries --publish` command is required:
@@ -102,7 +128,7 @@ Outputs go into the workspace's `output/connectivity_audit/` directory.
 A nonzero exit status indicates unproven connectivity or missing inputs;
 see [connectivity guidance](docs/connectivity.md).
 
-## Main outputs
+## Legacy centroid matrix outputs
 
 `out/distance_matrix_km.npy` and `.csv` contain the distances (kilometres);
 `out/towns.csv` fixes the row/column order. `out/row_validity_radius_km.npy`
@@ -182,7 +208,7 @@ python -m pip install -e ".[docs]"
 python -m mkdocs serve
 ```
 
-The `repo_url` is intentionally unset until you know the destination repository.
+The MkDocs `repo_url` points to `miraflor/net-distance-ph`.
 The source code is supplied under the MIT License (see [LICENSE](LICENSE));
 OpenStreetMap and administrative geographic datasets retain their own licensing
 and attribution requirements. Review the license before publishing.

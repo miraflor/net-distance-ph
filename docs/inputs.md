@@ -76,3 +76,13 @@ from settlement centers: origin definition is an analytical assumption.
    output; they can identify severe geometry mismatches.
 
 See [Reproducibility](reproducibility.md) for sources and publication guidance.
+
+<!-- v55-methods-documentation -->
+
+## Population-weighted model inputs (distinct from the legacy point shapefile)
+
+`net-distance-ph population-weighted` loads the plain `units.csv` (PSGC administrative hierarchy) and `barangay_population.csv` (nonnegative integer population per barangay) plus one chosen barangay point source. Bundled inputs derive from **Q2 2026 PSGC** administrative codes and **2024 barangay population**. Each positive-population barangay contributes one **interior polygon representative point**, **not** a measured resident location; the model does not use a gridded-population dataset. The original road/ferry graph is reused, with a separate population-specific reduced core that preserves attached demand nodes.
+
+Default geometry is **the exact hash-verified cached geometry from the latest completed population run** when available; otherwise the existing first-run OCHA policy applies. Older OCHA codes may not match all current PSGC records, and unmatched population is explicitly reported as **unmodeled**. To use the separately pinned Faeldon derivative, choose `--geometry-source faeldon`. `--geometry-source auto` is an *explicit* OCHA-first fallback policy. Keep and cite the actual geometry-source hash and policy in the population output manifest. There is no implicit substitution of polygon vintages: a missing/changed cached previous-run source causes a clear error.
+
+No official HUC/ICC classification is inferred when exporting the province-equivalent level. An official province contains registered member towns; a city or municipality without a province parent becomes an independent peer administrative OD unit. See [population methodology](population_weighted.md) and [reproducibility](reproducibility.md).
