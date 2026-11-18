@@ -68,6 +68,18 @@ restrictions, or legally traversable paths.
 | `net-distance-ph reduce` | Reduce the graph without changing modeled distances |
 | `net-distance-ph matrix` | Compute/resume distance rows |
 | `net-distance-ph verify` | Check computed distances against the unreduced graph |
+| `net-distance-ph population-weighted` | Compute conditional population-weighted OD matrices (town, province-equivalent, and region by default) using an existing graph |
+| `net-distance-ph view` | Open the read-only, local interactive explorer for completed population-weighted outputs |
+| `net-distance-ph boundaries --download` | Validate the pinned PSGC-aligned town boundary source; use `--publish` explicitly to select it |
+| `net-distance-ph diagnose-connectivity` | Read-only component-gap diagnostics from an existing graph |
+| `net-distance-ph inspect-osm-gaps` | Investigate local road-class gaps in the cached OSM PBF |
+| `net-distance-ph observe` | Summarize existing run logs and evidence; does not recompute a matrix |
+| `net-distance-ph audit-geography` | Audit geographic, population, and reachability coverage of an existing run |
+| `net-distance-ph audit-topology` | Audit representative-site graph-component lineage and disconnections |
+| `net-distance-ph inspect-topology-osm` | Inspect original OSM node-ID evidence around selected gaps |
+| `net-distance-ph audit-origin-snap` | Audit network snapping sensitivity for population origins |
+| `net-distance-ph audit-polygon-network` | Read-only selected polygon/network consistency checks |
+| `net-distance-ph reset` | Preview computational workspace cleanup; deletion requires `--execute` and typed confirmation |
 | `net-distance-ph run --until connectivity` | Prepare, graph, connectivity |
 | `net-distance-ph run --from reduce` | Reduce, matrix, verify; use existing graph |
 | `net-distance-ph run --only matrix` | Execute just the matrix stage |
@@ -99,6 +111,57 @@ interface, as is `net-distance-ph-connectivity`.
 package import availability and input file headers but is not a geographic
 accuracy audit. For rigorous national publication, retain input provenance,
 review long centroid snaps and ferry terminals, and run final verification.
+
+## Local output explorer (`view`)
+
+`net-distance-ph view` starts the **Net Distance PH Explorer** using the
+already-computed population-weighted matrices in the workspace. It requires
+at least one completed run with `units.csv`, `manifest.json`, and
+`distance_matrix_km.npy`; it is **not** a command for the separate legacy
+centroid matrices.
+
+```powershell
+net-distance-ph view
+net-distance-ph view --workspace "D:\Research\net-distance-ph"
+net-distance-ph view --port 8765 --no-open
+```
+
+The server binds only to **`127.0.0.1`**, uses an available port by default
+(`--port 0`), prints its URL, and normally opens the browser automatically.
+`--no-open` prints the address without opening a tab. Leave the process
+running while viewing and press **Ctrl+C** to stop. The explorer does not
+upload matrices or run on the public documentation site.
+
+The **Completed run** selector discovers timestamped (and compatible older)
+output directories; **Geographic level** lists only the `town`,
+`province_equivalent`, and `region` outputs actually available in the selected
+run. Selecting or searching a location highlights the **nearest X other
+units with finite conditional distance**. A stored `+inf` means no modeled
+reachable representative-population pairs and is excluded from the nearest
+ranking; reachability percentages are read from
+`reachable_pair_probability.npy` when available. Other controls include
+light/dark mode, ranked CSV export, zoom and pan, and toggles for boundaries,
+a road skeleton (motorway through tertiary, plus links), and ferry routes.
+
+Map data are prepared at viewer startup, then reused from a **disposable
+cartographic cache** at `variants/population_weighted/view_cache/`. The
+polygons originate in the GeoPackage selected through
+`data/current_boundaries.json`; road and ferry lines originate in the
+Shapefiles selected through `data/current_transport.json`. Province-equivalent
+and regional polygons are display-only dissolves of town polygons. Simplified
+lines and shapes do **not** modify routing graph geometry or the saved
+scientific outputs. Map preparation needs GeoPandas/Shapely and PyShp:
+
+```powershell
+python -m pip install -e ".[test,geo,transport]"
+```
+
+**Historical-run limitation:** the overlay follows the **currently selected**
+source releases, not necessarily those originally used for an older OD run.
+The overlay is geographic context, **not a drawing of the routes used to
+compute each distance**. For a province-equivalent run with a custom
+crosswalk whose exact mapping was not exported, the viewer refuses to invent
+an inaccurate dissolved boundary. The original matrices remain available.
 
 ## Inspect disconnected graph topology (read only)
 

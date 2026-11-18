@@ -106,6 +106,24 @@ No. The **network p-median problem** is canonical, but the implemented normalize
 
 No. The existing normalized input distinguishes missing province parents and city versus municipality, **not** a verified legal subclass. Province-equivalent groups include province-less municipalities (for example Pateros and SGA municipalities) as separate peers. The software intentionally does not infer HUC or ICC labels from missing parents.
 
+### How do I explore the distance matrices and compare output levels?
+
+Run `net-distance-ph view` in the installed environment after completing a
+population-weighted run. This launches a **local** browser explorer with
+selectors for completed runs and available town, province-equivalent, and
+region matrices. Click or search for a location, adjust **Closest X**, and
+inspect the ranked finite distances and reachability counts. The current
+boundary release and simplified road/ferry overlays provide optional map
+context. The viewer only reads scientific outputs; its display cache does not
+replace them. See [the CLI instructions](cli.md#local-output-explorer-view).
+
+### Can GitHub Pages display my local national matrices automatically?
+
+No. GitHub Pages hosts the **documentation**, not your local matrices. The
+explorer runs at a loopback address such as `http://127.0.0.1:<port>/` and
+reads files from your computational workspace; it does not upload them.
+Keep the viewer terminal open and press **Ctrl+C** when finished.
+
 ### Where are the default population-weighted matrices?
 
 The same `net-distance-ph population-weighted` run exports **town, province-equivalent and region** matrices. The last console block reports all three exact directories, the distance CSV/NumPy, reachability matrix, unit IDs and the index `latest_run.json`. To select one tier, add `--level town|province|region`. To reuse the exact polygons from the prior successful run, omit `--geometry-source` (the new `latest` policy); explicit providers are still supported.

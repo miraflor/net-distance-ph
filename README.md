@@ -45,6 +45,63 @@ Each completed invocation publishes its matrices under a **local-time-stamped ou
 
 **Read before using the matrices:** [complete population-weighted methodology](docs/population_weighted.md), [output semantics](docs/outputs.md), [foundational literature and novel choices](docs/literature.md), [validation](docs/validation.md), and [run status](docs/run-status.md). The legacy centroid pipeline, described below, has **a different distance definition** and remains available separately.
 
+## Explore completed outputs
+
+The **local Net Distance PH Explorer** opens completed population-weighted runs in
+an interactive map. It automatically discovers the output folders in the
+workspace and lets you switch between available **town, province-equivalent,
+and region** matrices without selecting `.npy` files manually.
+
+```powershell
+# The viewer uses the existing workspace; install the GIS dependencies once.
+python -m pip install -e ".[test,geo,transport]"
+net-distance-ph view
+
+# Optional: an alternate workspace and a fixed local port, without opening a tab.
+net-distance-ph view --workspace "D:\Research\net-distance-ph" --port 8765 --no-open
+```
+
+The command serves a **read-only local webpage** at `http://127.0.0.1:<port>/`
+(the port is chosen automatically unless specified). Keep the terminal open
+while using the page and press **Ctrl+C** to stop it. This is **not** a public
+GitHub Pages service and does not upload your matrices.
+
+Select a completed run and geographic level, click or search for a locality,
+and highlight its **closest X reachable units**, ranked by the stored
+conditional population-weighted distance. The interface also shows modeled
+reachability, supports light/dark mode, and offers optional administrative
+polygons, a simplified road skeleton, and ferry-route overlays.
+
+The viewer reads the existing `distance_matrix_km.npy`,
+`reachable_pair_probability.npy`, and `units.csv` without rerunning shortest
+paths. Display-only map geometry is prepared and reused under
+`variants/population_weighted/view_cache/`; the original GeoPackage,
+Shapefiles, and matrices are unchanged. Map layers come from the **currently
+selected** boundary and transport releases, which may differ from those of a
+historical output run. The overlays are context, **not reconstructed OD paths**.
+See [the CLI explorer reference](docs/cli.md#local-output-explorer-view)
+for options and limitations.
+
+## Inspect and audit existing results
+
+The installed CLI also provides read-only checks and targeted diagnostics.
+These commands operate on the current workspace, but each audit has its own
+prerequisites; consult the [CLI reference](docs/cli.md) before running one.
+
+| Command | Purpose |
+| --- | --- |
+| `net-distance-ph status` / `doctor` | Inspect available files or check dependencies and source headers; neither validates nationwide geographic accuracy |
+| `net-distance-ph observe` | Summarize recorded run timing and evidence from existing logs |
+| `net-distance-ph audit-geography` | Audit population coverage, province assignments, and modeled reachability |
+| `net-distance-ph audit-topology` | Trace disconnected representative-site components in the saved graph |
+| `net-distance-ph inspect-topology-osm` | Investigate potential topology gaps against the cached original OSM data |
+| `net-distance-ph audit-origin-snap` | Examine population-origin snapping sensitivity |
+| `net-distance-ph audit-polygon-network` | Check selected polygon and road-network consistency cases |
+| `net-distance-ph reset` | **Preview only** which computational files would be removed; deletion needs explicit confirmation and `--execute` |
+
+These diagnostics do not establish current ferry operations or legally
+traversable routes, and the viewer does not change the model.
+
 ## Legacy centroid quick start
 
 The installed pipeline now **automatically validates and selects** pinned PSGC-aligned

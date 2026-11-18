@@ -46,6 +46,27 @@ For a town pair, the distance is a **population-pair-weighted conditional mean a
 
 The `--level province` selection writes to `province_equivalent/`, **not** the historical province-only output. Each official province is a unit, and a city/municipality without a published province parent is a separate peer unit. This includes province-less municipalities as well as cities; the input hierarchy does **not** classify nonprovincial cities into HUC versus independent-component-city legal types. Each official town belongs to exactly one upper-tier unit. All outputs ultimately use the same barangay population weights.
 
+## Explore completed outputs locally
+
+```powershell
+net-distance-ph view
+```
+
+The read-only **Net Distance PH Explorer** discovers finished population-weighted
+runs in your workspace and provides run and level selectors (town,
+province-equivalent, region). Search or click an administrative unit to
+highlight the **closest X reachable units** using the stored `.npy` distances,
+view reachable/unreachable counts, and switch between light and dark themes.
+Optional display layers include administrative boundaries, a thinned road
+skeleton, and ferry routes. Cartographic layers are cached separately from
+scientific outputs and may represent the **current** source releases rather
+than the historical run's original releases.
+
+This launches a local browser server on `127.0.0.1`; it does **not** publish
+national matrices to GitHub Pages or recompute shortest paths. Press **Ctrl+C**
+to close the server. See [Getting started](getting-started.md) and the
+[Explorer CLI reference](cli.md#local-output-explorer-view).
+
 ## Legacy centroid workflow
 
 The original centroid pipeline remains available and separate:
