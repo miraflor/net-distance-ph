@@ -173,3 +173,96 @@ The evidence report distinguishes actual sampled numerical verification and
 population coverage from *not assessed* national connectivity, legal boundary
 validity, and real-world ferry service validity. A successful exit status
 is not a scientific certification. Historic results and logs are not changed.
+
+## Geographic and population coverage audit (v49)
+
+On an **existing completed population-weighted run**, inspect administrative
+exclusions, observed population-to-population reachability, component membership,
+and road/ferry graph topology *without rerunning routing or source preparation*:
+
+```powershell
+net-distance-ph audit-geography
+net-distance-ph audit-geography --skip-graph  # faster, population and province only
+net-distance-ph audit-geography --top 200
+net-distance-ph audit-geography --all-pairs   # potentially large streaming CSV
+```
+
+The command verifies the saved population input table hashes and matches town,
+province, representative-site, and reachability outputs by routing fingerprint.
+If the original run used `--province-crosswalk`, pass the original crosswalk
+again using `--province-crosswalk PATH`; its SHA-256 must match the run manifest.
+No administrative parentage or new route is inferred.
+
+**Outputs:** `workspace/output/geographic_audit/<routing_hash_prefix>/` contains
+`geographic_audit.json`, `province_excluded_towns.csv`,
+`population_components.csv`, `town_component_memberships.csv`,
+`top_zero_reachability_town_pairs.csv`, and
+`top_partial_reachability_town_pairs.csv`.
+`--all-pairs` also streams `all_noncomplete_town_pairs.csv`.
+
+By default, it additionally invokes the repository's **existing** stage-1
+connectivity auditor with its source-provenance checks, writes road-only and
+road+ferry official-town connectivity reports beneath `stage1_connectivity/`,
+and identifies original-graph offshore ferry endpoint nodes lacking a direct
+road/gangway attachment (`unattached_ferry_terminals.csv`). The original graph
+has more than 12 million nodes and this part is memory-intensive. `--skip-graph`
+leaves these two sections *unassessed*, not passed.
+
+A town with sites in different graph components is **not** forced into one
+component. Pairwise reachability reports separately distinguish zero modeled
+routes, partial modeled reachability, complete modeled reachability, and
+unmodeled origin population. **No direct ferry gangway** does not by itself
+prove network disconnection; nearest-town names are geographic context, not
+shortest routes. This audit does not certify real-world ferries, legal
+administrative assignments, or the practical usability of modeled routes.
+
+Existing graph, matrix, source, and routing checkpoint files are never changed;
+only new audit reports and a session log are written.
+
+## Representative-site topology diagnostic (v50)
+
+After `net-distance-ph audit-geography`, audit the **saved national graph versus
+barangay-preserving core** without rebuilding, changing any edges, computing
+shortest paths, or regenerating k-medians:
+
+```powershell
+net-distance-ph audit-topology --lineage-only
+net-distance-ph audit-topology
+# Optional targeted scope (diagnostic only; not model parameters):
+net-distance-ph audit-topology --top-components 20 --search-km 20
+```
+
+1. Verifies current graph bytes against the cache's original graph SHA-256,
+   cross-checks core/route/population hashes, and re-computes connected components
+   on both the original stage-1 and reduced barangay-preserving graphs.
+2. Checks **every saved selected representative**: the reduced component must
+   match the saved label; each populated original component must map to exactly
+   one reduced component and vice versa. A mismatch is a model-integrity failure;
+   geometric gaps are **not** inferred after such a failure.
+3. Reports, for every town/component, its modeled population, other towns in
+   that exact same component, and whether its centroid is in the same component.
+   Thus a submunicipal population area that shares another municipality's
+   network component can be distinguished from a genuinely isolated component.
+4. For the largest nonmain populated components, searches original graph
+   vertices within the stated spatial radius for nearby vertices in another
+   component and separately in the national majority component. Each candidate
+   includes geocoordinates, nearest geometric gap, graph-node types and degrees.
+   These are **triage leads**, not proofs that a real connection exists or should
+   be inserted. No candidate within 10 km does not prove physical isolation.
+
+Output: `workspace/output/topology_diagnostics/<routing_hash_prefix>/`:
+`topology_diagnostics.json`, `selected_site_components.csv` (all selected
+representative nodes and coordinates), `town_component_access.csv` (including
+cross-town component membership), `priority_components.csv`, and
+`candidate_geometric_gaps.csv`.
+
+**Memory warning:** Reads the saved 12-million-node original graph and computes
+its connected components; requires RAM, and the file SHA-256 scan adds I/O.
+If a locality has a disconnected representative, the k-median selection
+cannot create edges; this audit first determines whether the disconnection is
+already present in the original network or introduced by graph reduction.
+
+It does not adjudicate ferry operations, one-way legality, real-world bridge
+availability, or whether a close pair should be connected. Only new audit
+reports and logs are written; matrices, cached graph, source files, and
+representatives remain unchanged.

@@ -122,6 +122,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true", help="print full report JSON")
     p.add_argument("--no-write", action="store_true", help="do not write observability_report.json")
 
+    p = sub.add_parser("audit-geography", help="audit province exclusions, road/ferry topology, and population reachability")
+    p.add_argument("--workspace", type=Path, help="workspace containing existing completed output")
+    p.add_argument("--run-dir", type=Path, help="existing routing output directory (default latest)")
+    p.add_argument("--province-crosswalk", type=Path, help="original crosswalk if the saved run used one")
+    p.add_argument("--top", type=int, default=100, help="number of top zero/partial town pairs (default 100)")
+    p.add_argument("--all-pairs", action="store_true", help="stream all noncomplete town pairs to CSV (can be large)")
+    p.add_argument("--skip-graph", action="store_true", help="skip memory-intensive stage-1 original graph connectivity/ferry scan")
+
+    p = sub.add_parser("audit-topology", help="trace disconnected population representatives through original and reduced graphs")
+    p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
+    p.add_argument("--run-dir", type=Path, help="existing population-weighted run (default latest)")
+    p.add_argument("--top-components", type=int, default=15, help="number of largest nonmain populated components to inspect (default 15)")
+    p.add_argument("--search-km", type=float, default=10.0, help="local geometric candidate search radius (default 10 km; does NOT add edges)")
+    p.add_argument("--lineage-only", action="store_true", help="check original-versus-reduced component identity without searching nearby gaps")
+
     # Optional population-weighted matrices; baseline run stages remain unchanged.
     p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
     from .population_weighted import add_run_arguments
@@ -312,6 +327,30 @@ def main(argv: list[str] | None = None) -> int:
             return reset_run(args)
         except (ValueError, OSError, RuntimeError) as exc:
             print(f"RESET REFUSED: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "audit-topology":
+        from .topology_diagnostics import execute as topology_diagnostics
+        from .workspace import run_log
+        try:
+            if not 1 <= args.top_components <= 229:
+                raise ValueError("--top-components must be between 1 and 229")
+            if not 0 < args.search_km <= 1000:
+                raise ValueError("--search-km must be in (0, 1000]")
+            with run_log(workspace_path(args.workspace)):
+                return topology_diagnostics(args)
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            print(log_prefix() + f" TOPOLOGY AUDIT REFUSED: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "audit-geography":
+        from .geographic_audit import execute as geographic_audit
+        from .workspace import run_log
+        try:
+            if args.top < 1 or args.top > 100000:
+                raise ValueError("--top must be between 1 and 100000")
+            with run_log(workspace_path(args.workspace)):
+                return geographic_audit(args)
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            print(log_prefix() + f" GEOGRAPHIC AUDIT REFUSED: {exc}", file=sys.stderr)
             return 2
     if args.command == "observe":
         from .observability import report_existing
