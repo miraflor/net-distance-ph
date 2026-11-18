@@ -27,6 +27,8 @@ import sys
 
 import numpy as np
 
+from .output_selection import valid_output_run_name
+
 
 SCHEMA = "net-distance-ph/geographic-audit/v49"
 
@@ -106,7 +108,7 @@ def _resolve_run(workspace, requested=None):
     if not isinstance(routing_hash, str) or len(routing_hash) != 64:
         raise ValueError("Malformed routing fingerprint")
     if ((expected_hash is not None and expected_hash != routing_hash) or
-            chosen.name != routing_hash[:16] or tm.get("level") != "town"):
+            not valid_output_run_name(chosen.name, routing_hash) or tm.get("level") != "town"):
         raise ValueError("Latest-run pointer, town manifest, and routing directory do not agree")
     # Old runs contain a historical province-only export; new runs may be
     # town-only or also contain a nationally exhaustive province_equivalent.

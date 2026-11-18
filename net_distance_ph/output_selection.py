@@ -6,7 +6,32 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from datetime import datetime
 from pathlib import Path
+
+
+_DATED_DIR = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{3})?$")
+
+
+def valid_output_run_name(name: str, routing_hash: str) -> bool:
+    """Accept both v56 content-hash folders and v57 timestamp folders."""
+    return name == routing_hash[:16] or bool(_DATED_DIR.fullmatch(name))
+
+
+def create_timestamped_run_directory(output_root: Path, *, now: datetime | None = None) -> Path:
+    """Create a unique local-time output folder, without touching routing caches."""
+    stamp = (now if now is not None else datetime.now().astimezone()).strftime('%Y-%m-%d_%H-%M-%S')
+    root = Path(output_root)
+    for attempt in range(1000):
+        name = stamp if attempt == 0 else f'{stamp}-{attempt:03d}'
+        dest = root / name
+        try:
+            dest.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return dest.resolve()
+    raise FileExistsError(f'No free timestamped output folder under {root}')
 
 
 def _sha256(path: Path) -> str:
@@ -49,7 +74,7 @@ def previous_geometry(repo: Path, workspace: Path, home: Path) -> Path | None:
         raise ValueError("Latest population run has an invalid routing_hash")
     output_root = (home / "output").resolve()
     run = Path(latest.get("directory", "")).expanduser().resolve()
-    if run.parent != output_root or run.name != run_hash[:16]:
+    if run.parent != output_root or not valid_output_run_name(run.name, run_hash):
         raise ValueError("Latest population run directory and routing hash disagree")
     manifest = None
     for level in ("town", "province_equivalent", "region", "province"):

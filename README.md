@@ -41,6 +41,8 @@ The returned **distance** is the population-pair-weighted mean of **reachable se
 
 `--level province` produces a **province-equivalent** matrix (`province_equivalent/`): each published province plus each city or municipality without a province parent as a peer OD unit. This exhaustively groups towns without guessing HUC versus ICC legal labels from absent parent fields. The **same barangay populations** underlie all levels; aggregation sums unnormalized reachable-pair totals before taking a ratio. Old `province/` outputs are left untouched.
 
+Each completed invocation publishes its matrices under a **local-time-stamped output folder** such as `output/2026-11-18_19-20-30/` (sortable `YYYY-MM-DD_HH-MM-SS`, no spaces); the CLI prints the full paths. Computation caches retain their hash-based identifiers, and earlier hash-named output runs remain readable.
+
 **Read before using the matrices:** [complete population-weighted methodology](docs/population_weighted.md), [output semantics](docs/outputs.md), [foundational literature and novel choices](docs/literature.md), [validation](docs/validation.md), and [run status](docs/run-status.md). The legacy centroid pipeline, described below, has **a different distance definition** and remains available separately.
 
 ## Legacy centroid quick start

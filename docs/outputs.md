@@ -103,7 +103,7 @@ person can traverse it on a given date or at a given time.
 The installed default `net-distance-ph population-weighted` exports **all three levels** to:
 
 ```text
-~/Documents/net-distance-ph/variants/population_weighted/output/<routing-hash-prefix>/town/
+~/Documents/net-distance-ph/variants/population_weighted/output/YYYY-MM-DD_HH-MM-SS/town/
 ```
 
 The default additionally produces `province_equivalent/` (not the historical `province/`) and `region/`. `--level town|province|region` can select just one. These exports share **town-level routing totals**, with no separate higher-level medoid selection. `latest_run.json` describes only the levels requested in the latest invocation.
@@ -126,4 +126,6 @@ For towns A and B, the code accumulates `N_AB = sum(reachable sites s,t) p_s p_t
 
 ### v56: where the three population-weighted matrices go
 
-The default `net-distance-ph population-weighted` writes **all three** levels under `~/Documents/net-distance-ph/variants/population_weighted/output/<routing-hash-prefix>/`: `town/`, `province_equivalent/`, and `region/`. Each has `distance_matrix_km.csv`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, `units.csv`, and `manifest.json`. The command **prints the absolute directory and filenames for each level** and a `LATEST OUTPUT INDEX` path. The durable `variants/population_weighted/output/latest_run.json` contains `matrix_outputs` with these absolute paths. No assumption about the current working directory is needed.
+The default `net-distance-ph population-weighted` writes **all three** levels under `~/Documents/net-distance-ph/variants/population_weighted/output/YYYY-MM-DD_HH-MM-SS/`: `town/`, `province_equivalent/`, and `region/`. Each has `distance_matrix_km.csv`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, `units.csv`, and `manifest.json`. The command **prints the absolute directory and filenames for each level** and a `LATEST OUTPUT INDEX` path. The durable `variants/population_weighted/output/latest_run.json` contains `matrix_outputs` with these absolute paths. No assumption about the current working directory is needed.
+
+The dated directory is created in the machine's **local time** when export begins; if two runs share the same second, a `-001` suffix is added. Existing hash-named output folders are preserved and recognized by audit/geometry-reuse tools. Graph and Dijkstra checkpoint directories remain hash-based.

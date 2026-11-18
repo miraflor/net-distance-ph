@@ -417,6 +417,10 @@ construction or separate intersite shortest-path searches. The output pointer
 `latest_run.json` lists only the levels requested in that invocation.
 This CLI change does not run or modify any existing computation by itself.
 
+### v57: human-readable output run folders
+
+Population-weighted exports are grouped by **local output timestamp**, for example `2026-11-18_19-20-30/town/`, `2026-11-18_19-20-30/province_equivalent/`, and `2026-11-18_19-20-30/region/` under `variants/population_weighted/output/`. Same-second runs gain `-001`, `-002`, etc. The CLI prints each absolute path; `latest_run.json` points to the dated directory. Existing hash-named published runs remain supported, and **hash-based routing, graph, and k-median caches remain unchanged**.
+
 ### v56: exact output locations and geometry reuse
 
 On successful completion, the CLI prints the full **OUTPUT [TOWN]**, **OUTPUT [PROVINCE_EQUIVALENT]**, **OUTPUT [REGION]** directories, each distance CSV and NPY, reachability NPY, `units.csv` row index, and **LATEST OUTPUT INDEX** (`latest_run.json`). The index also contains a `matrix_outputs` object with these file paths. Omitted `--geometry-source` defaults to `latest`: reuse the exact SHA-256-verified cached source of the last completed run; if there is no prior run, use OCHA as before. Explicit `--geometry-source faeldon|ocha|auto` and `--points PATH` take precedence. An invalid prior-run source is an error, not grounds for silently downloading a replacement.

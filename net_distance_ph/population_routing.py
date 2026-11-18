@@ -25,7 +25,7 @@ from .population_weighted import (SCHEMA, digest, write_json, read_points, valid
     select_sites, select_sites_balanced, combine_group_matrices, finish_means, save_csv_matrix, filter_origin_rows)
 from .population_data import load_plain_dataset, export_bundled_defaults
 from .province_equivalent import build_province_equivalents
-from .output_selection import previous_geometry, output_manifest, print_output_locations
+from .output_selection import previous_geometry, output_manifest, print_output_locations, create_timestamped_run_directory
 
 
 # Population-weighted logging instrumentation (v44)
@@ -487,7 +487,7 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
 
 @_pw_timed_phase(lambda *a, **kw: f"matrix export: {a[1] if len(a) > 1 else kw.get('level', 'unknown')}")
 def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,sites,
-                extra, *, route_hash, core_key, full_town_pop=None, snap_audit=None, town_codes=None):
+                extra, *, route_hash, core_key, full_town_pop=None, snap_audit=None, town_codes=None, output_run=None):
     from .population_weighted import finish_means, combine_group_matrices, save_csv_matrix
     codes=[u["code"] for u in units]
     site_towns=sorted({s["town_psgc"] for s in sites}) if town_codes is None else list(town_codes)
@@ -521,7 +521,7 @@ def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,site
            out=np.full_like(coverage,np.inf),where=coverage>0)
     # Results are immutable per routing fingerprint, so changing the access
     # budget never silently replaces an earlier scientific run.
-    target=home/"output"/route_hash[:16]/level
+    target=(Path(output_run) if output_run is not None else home/"output"/route_hash[:16])/level
     target.mkdir(parents=True,exist_ok=True)
     previous=target/"manifest.json"
     administrative_fingerprint = None
@@ -716,8 +716,8 @@ def run(args):
     all_towns=sorted(c for c,r in roster.items() if r["level"] in ("city","municipality"))
     towns,town_num,town_den,route_hash=compute_routing(home,core_dir,sites,key,
          workers=getattr(args,"workers",2),all_towns=all_towns)
-    output_run=home/"output"/route_hash[:16]
-    output_run.mkdir(parents=True,exist_ok=True)
+    output_run=create_timestamped_run_directory(home/"output")
+    print(f"OUTPUT RUN DIRECTORY: {output_run}", flush=True)
     selection_cache_hash=hashlib.sha256(json.dumps(selection,sort_keys=True).encode()).hexdigest()[:16]
     selection_audit=home/"town_sites"/key/selection_cache_hash/"selection_audit.csv"
     write_json(home/"town_sites"/key/selection_cache_hash/"selection_policy.json",
@@ -755,7 +755,7 @@ def run(args):
     output_paths = {}
     if args.level in {"all","town"}:
         output_paths["town"] = _save_level(home,"town",town_units,np.arange(len(towns)),town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,core_key=key,
-                    full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
+                    full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns,output_run=output_run)
     selected_levels=[]
     if args.level in {"all","town"}:
         selected_levels.append("town")
@@ -767,20 +767,20 @@ def run(args):
               f"{pe_meta['unit_types']}; {len(towns)} towns included, no omissions",flush=True)
         output_paths["province_equivalent"] = _save_level(home,"province_equivalent",units,pe_map,town_num,town_den,town_pop,sites,pop_meta,
                     route_hash=route_hash,core_key=key,full_town_pop=full_town_pop,
-                    snap_audit=snap_audit,town_codes=towns)
+                    snap_audit=snap_audit,town_codes=towns,output_run=output_run)
         write_json(output_run/"province_equivalent"/"administrative_definition.json",pe_meta)
         selected_levels.append("province_equivalent")
     if args.level in {"all","region"}:
         output_paths["region"] = _save_level(home,"region",[{"code":c,"name":roster[c]["name"]} for c in region_codes],
                     reg_map,town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,
-                    core_key=key,full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
+                    core_key=key,full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns,output_run=output_run)
         selected_levels.append("region")
     if set(selected_levels) != set(output_paths):
         raise ValueError("Requested output levels and completed matrix paths disagree")
     locations = output_manifest(output_paths)  # refuse to claim missing files
     latest_file = home/"output"/"latest_run.json"
     write_json(latest_file,{"schema":SCHEMA,"routing_hash":route_hash,
-        "directory":str(output_run),"levels": selected_levels,
+        "directory":str(output_run),"output_folder":output_run.name,"levels": selected_levels,
         "median_selection":selection_mode,"selection_audit_csv":str(selection_audit),
         "verification_file":str(output_run/"independent_original_graph_verification.json"),
         "matrix_outputs":locations})
