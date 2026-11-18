@@ -137,6 +137,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--search-km", type=float, default=10.0, help="local geometric candidate search radius (default 10 km; does NOT add edges)")
     p.add_argument("--lineage-only", action="store_true", help="check original-versus-reduced component identity without searching nearby gaps")
 
+    p = sub.add_parser("inspect-topology-osm", help="read-only OSM node-ID investigation of v50 populated component gaps")
+    p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
+    p.add_argument("--top", type=int, default=15, help="top v50 populated components (default 15)")
+    p.add_argument("--ranks", nargs="+", type=int, help="specific v50 priority ranks (e.g. 2 6 7 8 9)")
+    p.add_argument("--relation", choices=("main", "other", "both"), default="both",
+                   help="nearest main, nearest other, or both (default both; identical endpoint pairs deduplicated)")
+    p.add_argument("--radius-m", type=float, default=1000.0,
+                   help="local OSM way inspection radius in metres (100..10000; default 1000)")
+
     # Optional population-weighted matrices; baseline run stages remain unchanged.
     p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
     from .population_weighted import add_run_arguments
@@ -327,6 +336,15 @@ def main(argv: list[str] | None = None) -> int:
             return reset_run(args)
         except (ValueError, OSError, RuntimeError) as exc:
             print(f"RESET REFUSED: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "inspect-topology-osm":
+        from .topology_osm_investigation import execute as osm_investigation
+        from .workspace import run_log
+        try:
+            with run_log(workspace_path(args.workspace)):
+                return osm_investigation(args)
+        except (OSError, ValueError, RuntimeError, KeyError, ImportError) as exc:
+            print(log_prefix() + f" OSM INVESTIGATION REFUSED: {exc}", file=sys.stderr)
             return 2
     if args.command == "audit-topology":
         from .topology_diagnostics import execute as topology_diagnostics

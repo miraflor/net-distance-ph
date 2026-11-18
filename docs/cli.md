@@ -266,3 +266,37 @@ It does not adjudicate ferry operations, one-way legality, real-world bridge
 availability, or whether a close pair should be connected. Only new audit
 reports and logs are written; matrices, cached graph, source files, and
 representatives remain unchanged.
+
+## Population-gap original OSM node-ID investigation (v51)
+
+After `net-distance-ph audit-topology`, use the original **cached** OSM PBF to
+inspect component gaps found around populated representatives (no graph edits):
+
+```powershell
+# Five urban cases, in v50's original ranking:
+net-distance-ph inspect-topology-osm --ranks 2 6 7 8 9 --radius-m 1000
+# All valid candidates among the 15 largest non-main population components:
+net-distance-ph inspect-topology-osm --top 15
+```
+
+Reuses the repository's existing `osm_gap_inspection` implementation of local
+path search over actual **shared OSM node IDs**. Reports original OSM way IDs,
+nearby road classes and access tags, and witness node-ID paths under baseline,
+expanded ordinary-road and service-road scenarios. Validates routing hash,
+original graph SHA-256 and stage-1 source fingerprints, transport release
+provenance, and cached PBF SHA-256 before running. The selected OSM file is read
+once with a locations-enabled PBF scan; the full-country scan and `flex_mem`
+location index may be resource-intensive. `osmium` is needed; use
+`python -m pip install -e ".[transport]"` if missing.
+
+Outputs live in `workspace/output/topology_osm_investigation/<routing_hash_prefix>/`:
+`investigation_summary.json`, `gap_findings.csv`, `nearby_osm_ways.csv`,
+`endpoint_osm_node_ids.csv`, and `local_osm_paths.geojson`.
+
+**Interpretation constraints:** nearest geometric gap is not a missing road;
+local shared OSM ID paths are undirected topology only, not validation of road
+access, bridges, grade separation, or a functioning ferry. Absence of a local
+path is inconclusive outside the search window. Ferry routes are reported as
+nearby ways but are not included in the inspector's road-only BFS scenarios.
+
+No network edges, source data, model outputs, or routing parameters change.
