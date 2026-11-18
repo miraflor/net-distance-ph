@@ -267,6 +267,40 @@ python -m pip install -e ".[docs]"
 python -m mkdocs serve
 ```
 
+## Author and Citation
+
+**James Matthew Miraflor**  
+[Scientific Computing Laboratory](https://scl.dcs.upd.edu.ph/)  
+[Department of Computer Science](https://dcs.upd.edu.ph/)  
+College of Engineering  
+University of the Philippines Diliman
+
+**net-distance-ph** is authored and maintained by James Matthew Miraflor, with AI assistance in software development, debugging, testing, and documentation. Responsibility for the project's methodological decisions, scientific validity, and published outputs rests with the author.
+
+### Citing this software
+
+If you use **net-distance-ph** in academic research, please cite:
+
+Miraflor, J. M. (2026). *net-distance-ph: Population-weighted road–ferry network distance matrices for the Philippines* [Computer software]. GitHub. https://github.com/miraflor/net-distance-ph
+
+**BibTeX:**
+
+```bibtex
+@misc{miraflor2026netdistanceph,
+  author       = {Miraflor, James Matthew},
+  title        = {{net-distance-ph}: Population-Weighted
+                  Road--Ferry Network Distance Matrices
+                  for the Philippines},
+  year         = {2026},
+  howpublished = {Computer software},
+  institution  = {Scientific Computing Laboratory,
+                  Department of Computer Science,
+                  College of Engineering,
+                  University of the Philippines Diliman},
+  url          = {https://github.com/miraflor/net-distance-ph}
+}
+```
+
 The MkDocs `repo_url` points to `miraflor/net-distance-ph`.
 The source code is supplied under the MIT License (see [LICENSE](LICENSE));
 OpenStreetMap and administrative geographic datasets retain their own licensing
