@@ -33,6 +33,7 @@ py-modules = ["run", "config", "check_setup", "check_reduce_status"]
 include = ["net_distance_ph*", "scripts*", "reference*"]
 
 [tool.setuptools.package-data]
+"net_distance_ph" = ["view_app.html"]
 "reference.psgc" = ["*.json", "*.jsonl.gz", "*.xlsx", "README.md"]
 
 [tool.pytest.ini_options]
