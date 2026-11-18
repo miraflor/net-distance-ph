@@ -99,7 +99,8 @@ def test_one_time_default_export_and_independence_from_legacy_source(tmp_path, m
 
 def test_optional_runner_arguments_work_as_one_command():
     args=pop.parse_args([])
-    assert args.level=="all" and args.dataset_dir is None and args.points is None
+    assert (args.level=="town" and args.median_selection=="balanced"
+            and args.dataset_dir is None and args.points is None)
     custom=pop.parse_args(["--dataset-dir","custom","--level","region","--no-auto-geometry"])
     assert custom.level=="region" and custom.no_auto_geometry
 

@@ -403,7 +403,8 @@ def add_run_arguments(p):
     p.add_argument("--workspace", type=Path, default=Path.home() / "Documents" / "net-distance-ph", help="existing graph workspace")
     p.add_argument("--dataset-dir", type=Path, help="folder with units.csv and barangay_population.csv (default: bundled normalized tables)")
     p.add_argument("--points", type=Path, help="optional barangay points.csv with psgc_code,lon,lat; otherwise auto-discover/download pinned GIS geometry")
-    p.add_argument("--level", choices=("town", "province", "region", "all"), default="all")
+    p.add_argument("--level", choices=("town", "province", "province-equivalent", "region", "all"), default="town",
+                   help="town (default); province/province-equivalent (province + nonprovincial peers); region; all")
     p.add_argument("--median-selection", choices=("balanced", "one"), default="balanced",
                    help="balanced: automatic component-wise k via normalized access/complexity tradeoff (default); one: legacy 1-median per component")
     p.add_argument("--max-mean-access-km", type=float, default=None,

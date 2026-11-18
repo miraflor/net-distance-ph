@@ -99,22 +99,25 @@ def _resolve_run(workspace, requested=None):
     if not _inside(chosen, base) or chosen.parent != base.resolve():
         raise ValueError(f"Routing run directory must be an immediate child of {base}: {chosen}")
     town = chosen / "town"
-    province = chosen / "province"
-    for directory in (town, province):
-        if not (directory / "manifest.json").is_file():
-            raise FileNotFoundError(f"Existing town and province matrices are needed: {directory}")
+    if not (town / "manifest.json").is_file():
+        raise FileNotFoundError(f"An existing town matrix is needed for this audit: {town}")
     tm = _read_json(town / "manifest.json")
-    pm = _read_json(province / "manifest.json")
     routing_hash = tm["routing_hash"]
     if not isinstance(routing_hash, str) or len(routing_hash) != 64:
         raise ValueError("Malformed routing fingerprint")
-    if (pm.get("routing_hash") != routing_hash or
-            expected_hash is not None and expected_hash != routing_hash or
-            chosen.name != routing_hash[:16]):
-        raise ValueError("Latest-run pointer, matrix manifests, and routing directory do not agree")
-    if (tm.get("level") != "town" or pm.get("level") != "province" or
-            tm.get("core_cache_key") != pm.get("core_cache_key")):
-        raise ValueError("Town and province manifests describe different runs")
+    if ((expected_hash is not None and expected_hash != routing_hash) or
+            chosen.name != routing_hash[:16] or tm.get("level") != "town"):
+        raise ValueError("Latest-run pointer, town manifest, and routing directory do not agree")
+    # Old runs contain a historical province-only export; new runs may be
+    # town-only or also contain a nationally exhaustive province_equivalent.
+    preferred = chosen / "province_equivalent"
+    historical = chosen / "province"
+    optional = preferred if (preferred / "manifest.json").is_file() else historical
+    pm = _read_json(optional / "manifest.json") if (optional / "manifest.json").is_file() else None
+    if pm is not None and (pm.get("routing_hash") != routing_hash or
+            pm.get("core_cache_key") != tm.get("core_cache_key") or
+            pm.get("level") not in {"province", "province_equivalent"}):
+        raise ValueError("Optional upper-tier manifest describes a different routing run")
     return chosen, tm, pm, routing_hash
 
 
@@ -437,18 +440,28 @@ def execute(args):
     if int(town_manifest["n_units"]) != len(towns):
         raise ValueError("Town count differs from manifest")
     crosswalk = _read_crosswalk(args.province_crosswalk, units,
-                               province_manifest.get("province_crosswalk_sha256"))
+                               province_manifest.get("province_crosswalk_sha256") if province_manifest else None)
     exclusions = province_exclusions(towns, units, input_pop, modeled_pop, crosswalk)
-    # The province manifest's excluded total is based on INPUT population.
+    # Raw PSGC province-parent gaps are not actual exclusions from an
+    # exhaustive province-equivalent export. Historical province-only runs
+    # retain their original excluded-population consistency check.
     excluded_input = sum(r["input_population"] for r in exclusions)
-    if not math.isclose(excluded_input, float(province_manifest["excluded_population_by_level"]), rel_tol=0, abs_tol=1):
-        raise ValueError("Province-exclusion list disagrees with the saved province manifest")
+    upper_tier = province_manifest.get("level") if province_manifest else None
+    if upper_tier == "province":
+        if not math.isclose(excluded_input, float(province_manifest["excluded_population_by_level"]), rel_tol=0, abs_tol=1):
+            raise ValueError("Province-exclusion list disagrees with the saved province manifest")
+    elif upper_tier == "province_equivalent":
+        if not math.isclose(float(province_manifest["excluded_population_by_level"]),0,rel_tol=0,abs_tol=1):
+            raise ValueError("Province-equivalent export cannot have excluded town population")
     out = workspace / "output" / "geographic_audit" / routing_hash[:16]
     out.mkdir(parents=True, exist_ok=True)
     _write_csv(out / "province_excluded_towns.csv", exclusions,
                ("town_psgc","town_name","classification","region_psgc","region_name","province_psgc",
                 "reason","input_population","modeled_population","unmodeled_population"))
-    print(f"PROVINCE: {len(exclusions)} towns excluded; {sum(r['modeled_population'] for r in exclusions):,} modeled residents", flush=True)
+    if upper_tier=="province":
+        print(f"LEGACY PROVINCE: {len(exclusions)} towns excluded; {sum(r['modeled_population'] for r in exclusions):,} modeled residents", flush=True)
+    else:
+        print(f"RAW PROVINCE HIERARCHY: {len(exclusions)} towns without provincial parent; output tier={upper_tier or 'town_only'}; these are NOT excluded from town output", flush=True)
     all_pairs = out / "all_noncomplete_town_pairs.csv" if args.all_pairs else None
     pair_summary, zeros, partial = pair_reachability(towns, input_pop, modeled_pop, probability,
                                                      top=args.top, all_pairs_path=all_pairs)
@@ -489,12 +502,15 @@ def execute(args):
         "schema":SCHEMA, "routing_hash":routing_hash, "run_directory":str(run),
         "source_input_sha256":input_hashes,
         "historical_run_code_commit": None,
-        "province_accounting": {"excluded_town_count":len(exclusions),
-            "excluded_input_population":excluded_input,
-            "excluded_modeled_population":sum(r["modeled_population"] for r in exclusions),
-            "excluded_unmodeled_population":sum(r["unmodeled_population"] for r in exclusions),
-            "province_rollup_is_nationally_complete":not bool(exclusions),
-            "note":"No province parent in the model's input hierarchy is not, by itself, a claim about the locality's legal status."},
+        "province_accounting": {"output_level":upper_tier,
+            "towns_without_raw_province_parent":len(exclusions),
+            "population_without_raw_province_parent":excluded_input,
+            "excluded_town_count":(len(exclusions) if upper_tier=="province" else 0 if upper_tier=="province_equivalent" else None),
+            "excluded_input_population":(excluded_input if upper_tier=="province" else 0 if upper_tier=="province_equivalent" else None),
+            "excluded_modeled_population":(sum(r["modeled_population"] for r in exclusions) if upper_tier=="province" else 0 if upper_tier=="province_equivalent" else None),
+            "excluded_unmodeled_population":(sum(r["unmodeled_population"] for r in exclusions) if upper_tier=="province" else 0 if upper_tier=="province_equivalent" else None),
+            "province_rollup_is_nationally_complete":(False if exclusions else True) if upper_tier=="province" else True if upper_tier=="province_equivalent" else None,
+            "note":"CSV lists towns without a raw provincial parent, not necessarily towns excluded from the selected output. Province-equivalent exports include nonprovincial cities and municipalities as peers; None indicates not computed."},
         "population_pair_reachability":pair_summary,
         "population_site_components":comp_summary,
         "original_stage1_connectivity":original_conn,

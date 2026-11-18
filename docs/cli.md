@@ -373,3 +373,42 @@ distribution. Individual polygons with invalid source geometry are repaired
 for *measurement only* and explicitly flagged. For other geometry policies
 (e.g. OCHA, custom points), this implementation refuses rather than silently
 substitute a different polygon release.
+
+## v54: town default and exhaustive province-equivalent layer
+
+`net-distance-ph population-weighted` now defaults to **`--level town`** and
+**`--median-selection balanced`**. Balanced selection is the existing
+component-aware network k-medians; it does not force connections between
+road/ferry components. The default exports only the town-to-town distance
+and population-pair reachability matrices. All work is derived from the same
+saved graph, barangay points, and official barangay counts.
+
+Explicit output selection:
+
+```powershell
+net-distance-ph population-weighted                          # town only
+net-distance-ph population-weighted --level province           # province equivalents only
+net-distance-ph population-weighted --level province-equivalent # synonym
+net-distance-ph population-weighted --level region             # region only
+net-distance-ph population-weighted --level all                # town + province equivalents + region
+```
+
+`--level province` is a compatibility alias, but **it no longer exports a
+province-only matrix**. The output is
+`variants/population_weighted/output/<routing-hash>/province_equivalent/`.
+The historical `province/` output, when present, is left untouched.
+`province_equivalent/units.csv` includes a `unit_type` column:
+`province`, `nonprovincial_city`, or `nonprovincial_municipality`. The normalized
+PSGC tables do not encode the HUC/ICC legal distinction; we make no speculative
+claim about which independent cities are HUC or ICC. Province-less
+municipalities, including Pateros and SGA localities, are included as their own
+units rather than lost. Each town is mapped exactly once. An explicit
+`--province-crosswalk` can override an empty parent only when the user supplies
+a validated assignment; no inferred assignment is made by default.
+
+Higher-tier matrices aggregate the same completed town-level routing
+numerators and reachable-population denominators, so their population and
+reachability accounting is conservative. They do not cause separate graph
+construction or separate intersite shortest-path searches. The output pointer
+`latest_run.json` lists only the levels requested in that invocation.
+This CLI change does not run or modify any existing computation by itself.

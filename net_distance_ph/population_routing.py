@@ -24,6 +24,7 @@ from . import reduce as rd
 from .population_weighted import (SCHEMA, digest, write_json, read_points, validate_join,
     select_sites, select_sites_balanced, combine_group_matrices, finish_means, save_csv_matrix, filter_origin_rows)
 from .population_data import load_plain_dataset, export_bundled_defaults
+from .province_equivalent import build_province_equivalents
 
 
 # Population-weighted logging instrumentation (v44)
@@ -508,6 +509,11 @@ def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,site
         pop=np.bincount(mapping[keep],weights=full_town_pop[keep],minlength=len(units)).astype(np.float64)
         modeled_pop=np.bincount(mapping[keep],weights=town_pop[keep],minlength=len(units)).astype(np.float64)
         access_sum=np.bincount(mapping[keep],weights=access_total[keep],minlength=len(units)).astype(np.float64)
+    if level=="province_equivalent":
+        if np.any(np.asarray(chosen_mapping)<0):
+            raise ValueError("Province-equivalent mapping has unassigned towns")
+        if not np.isclose(pop.sum(),full_town_pop.sum(),rtol=0,atol=0) or not np.isclose(modeled_pop.sum(),town_pop.sum(),rtol=0,atol=0):
+            raise ValueError("Province-equivalent grouping lost town population; refusing publication")
     mean_access=np.divide(access_sum,modeled_pop,out=np.zeros_like(modeled_pop),where=modeled_pop>0)
     cond,coverage=finish_means(numerator,denominator,pop)
     bound=np.divide(mean_access[:,None]+mean_access[None,:],coverage,
@@ -517,10 +523,17 @@ def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,site
     target=home/"output"/route_hash[:16]/level
     target.mkdir(parents=True,exist_ok=True)
     previous=target/"manifest.json"
+    administrative_fingerprint = None
+    if level=="province_equivalent":
+        fingerprint_data={"units":[(u["code"],u["unit_type"]) for u in units],
+                          "town_to_unit_mapping":np.asarray(chosen_mapping,dtype=int).tolist()}
+        administrative_fingerprint=hashlib.sha256(json.dumps(fingerprint_data,sort_keys=True).encode()).hexdigest()
     if previous.is_file():
         old=json.loads(previous.read_text(encoding="utf-8"))
         if old.get("routing_hash")!=route_hash or old.get("core_cache_key")!=core_key:
             raise ValueError("Output fingerprint collision/mismatch; refusing to overwrite")
+        if level=="province_equivalent" and old.get("administrative_fingerprint") != administrative_fingerprint:
+            raise ValueError("Province-equivalent administrative mapping changed; refusing to overwrite an existing export")
     np.save(target/"distance_matrix_km.npy",cond)
     np.save(target/"reachable_pair_probability.npy",coverage)
     np.save(target/"population_per_unit.npy",pop)
@@ -531,8 +544,14 @@ def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,site
     np.save(target/"distance_approximation_bound_km.npy",bound)
     save_csv_matrix(target/"distance_matrix_km.csv",cond,units)
     with (target/"units.csv").open("w",newline="",encoding="utf-8") as fd:
-        wr=csv.writer(fd);wr.writerow(["row","psgc_code","name","population"])
-        for i,u in enumerate(units):wr.writerow([i,u["code"],u["name"],f"{pop[i]:.0f}"])
+        wr=csv.writer(fd)
+        if level=="province_equivalent":
+            wr.writerow(["row","psgc_code","name","population","unit_type"])
+            for i,u in enumerate(units):
+                wr.writerow([i,u["code"],u["name"],f"{pop[i]:.0f}",u["unit_type"]])
+        else:
+            wr.writerow(["row","psgc_code","name","population"])
+            for i,u in enumerate(units):wr.writerow([i,u["code"],u["name"],f"{pop[i]:.0f}"])
     stats={"schema":SCHEMA,"level":level,"distance_definition":"conditional population-weighted expectation of shortest distances between representative road nodes; NOT centroid distance and NOT expected individual trip length",
            "diagonal":"Within-unit expected distance between two independent population draws; not forced to zero",
            "reachability":"reachable_pair_probability is a conservative fraction of total census population-pairs with demonstrated modeled routes; unsnappable origin population is included in the denominator and counted as UNMODELED (not proven disconnected); zero probability -> +inf",
@@ -550,6 +569,11 @@ def _save_level(home,level,units,chosen_mapping, town_num,town_den,town_pop,site
            "province_crosswalk_sha256":extra.get("province_crosswalk_sha256"),
            "core_cache_key":core_key,"routing_hash":route_hash,
            "population_source":extra["source"]}
+    if level=="province_equivalent":
+        stats["administrative_fingerprint"]=administrative_fingerprint
+        stats["unit_types"]={kind:sum(u["unit_type"]==kind for u in units) for kind in sorted({u["unit_type"] for u in units})}
+        stats["administrative_definition"]="Official provinces plus each nonprovincial city/municipality as a peer unit; does not guess HUC vs ICC"
+        stats["national_population_exhaustive"] = True
     write_json(target/"manifest.json",stats)
     print(f"WROTE {level} {len(units)} x {len(units)} population-weighted distance and reachability matrices: {target}")
     return target
@@ -710,30 +734,39 @@ def run(args):
     print(f"POPULATION COVERAGE: {int(town_pop.sum()):,}/{int(full_town_pop.sum()):,} "
           "residents represented by snapped barangay origins",flush=True)
     town_units=[{"code":t,"name":roster[t]["name"]} for t in towns]
-    province_codes=sorted(c for c,r in roster.items() if r.get("level")=="province")
     region_codes=sorted(c for c,r in roster.items() if r.get("level")=="region")
-    pm={c:i for i,c in enumerate(province_codes)}
     rm={c:i for i,c in enumerate(region_codes)}
-    prov_map=np.array([pm.get(roster[t]["province_psgc"],-1) for t in towns],dtype=int)
-    for i,t in enumerate(towns):
-        if t in crosswalk:prov_map[i]=pm[crosswalk[t]]
     reg_map=np.array([rm.get(roster[t]["region_psgc"],-1) for t in towns],dtype=int)
     if (reg_map<0).any():
         raise ValueError(f"Town-to-region mapping incomplete: {[towns[i] for i in np.flatnonzero(reg_map<0)][:10]}")
     check=verify_original_graph(workspace,core_dir,sites,args.verify_sites)
     write_json(output_run/"independent_original_graph_verification.json",check)
+    # Default is town-only. Higher-level matrices aggregate the SAME completed
+    # town numerator/denominator; no separate routing or medoid selection.
     if args.level in {"all","town"}:
         _save_level(home,"town",town_units,np.arange(len(towns)),town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,core_key=key,
                     full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
-    if args.level in {"all","province"}:
-        print(f"PROVINCE ACCOUNTING: {int(np.count_nonzero(prov_map<0))} towns excluded; population {int(town_pop[prov_map<0].sum()):,}")
-        _save_level(home,"province",[{"code":c,"name":roster[c]["name"]} for c in province_codes],prov_map,town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,core_key=key,
-                    full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
+    selected_levels=[]
+    if args.level in {"all","town"}:
+        selected_levels.append("town")
+    if args.level in {"all","province","province-equivalent"}:
+        units, pe_map, pe_meta=build_province_equivalents(roster,towns,crosswalk)
+        if (pe_map<0).any() or pe_meta["n_towns"]!=len(towns):
+            raise ValueError("Province-equivalent units do not cover every town")
+        print(f"PROVINCE EQUIVALENTS: {len(units)} units; "
+              f"{pe_meta['unit_types']}; {len(towns)} towns included, no omissions",flush=True)
+        _save_level(home,"province_equivalent",units,pe_map,town_num,town_den,town_pop,sites,pop_meta,
+                    route_hash=route_hash,core_key=key,full_town_pop=full_town_pop,
+                    snap_audit=snap_audit,town_codes=towns)
+        write_json(output_run/"province_equivalent"/"administrative_definition.json",pe_meta)
+        selected_levels.append("province_equivalent")
     if args.level in {"all","region"}:
-        _save_level(home,"region",[{"code":c,"name":roster[c]["name"]} for c in region_codes],reg_map,town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,core_key=key,
-                    full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
+        _save_level(home,"region",[{"code":c,"name":roster[c]["name"]} for c in region_codes],
+                    reg_map,town_num,town_den,town_pop,sites,pop_meta,route_hash=route_hash,
+                    core_key=key,full_town_pop=full_town_pop,snap_audit=snap_audit,town_codes=towns)
+        selected_levels.append("region")
     write_json(home/"output"/"latest_run.json",{"schema":SCHEMA,"routing_hash":route_hash,
-        "directory":str(output_run),"levels": ["town","province","region"] if args.level=="all" else [args.level],
+        "directory":str(output_run),"levels": selected_levels,
         "median_selection":selection_mode,"selection_audit_csv":str(selection_audit),
         "verification_file":str(output_run/"independent_original_graph_verification.json")})
     print("COMPLETE: baseline centroid matrix, selected graph releases and original raw datasets unchanged")

@@ -102,7 +102,7 @@ def test_routing_dir_boundary_and_manifest_validation(tmp_path):
     with pytest.raises(ValueError,match="immediate child"):
         ga._resolve_run(tmp_path/"workspace",tmp_path/"outside")
     (run/"province"/"manifest.json").write_text(json.dumps({"routing_hash":"b"*64,"core_cache_key":"one","level":"province"}))
-    with pytest.raises(ValueError,match="do not agree"):
+    with pytest.raises(ValueError,match="Optional upper-tier manifest describes a different routing run"):
         ga._resolve_run(tmp_path/"workspace")
 
 
