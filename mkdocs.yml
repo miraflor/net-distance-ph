@@ -28,6 +28,7 @@ nav:
   - FAQ: faq.md
 theme:
   name: material
+  logo: assets/ndph-mark.svg
   language: en
   palette:
     - scheme: default

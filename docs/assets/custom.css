@@ -1,6 +1,278 @@
-:root { --md-primary-fg-color: #304455; --md-accent-fg-color: #a75e15; }
-.md-header__title { font-weight: 700; letter-spacing: -.015em; }
-.md-typeset h1 { font-weight: 750; letter-spacing: -.03em; }
-.md-typeset h2 { margin-top: 1.8em; }
-.md-typeset table:not([class]) { border-radius: 8px; overflow: hidden; }
-.md-typeset .highlight { border-radius: 6px; }
+/* Net Distance PH documentation · Explorer-aligned visual theme
+   This stylesheet changes presentation only. Content, page locations, navigation,
+   section structure, and MkDocs Material functionality remain unchanged.
+   Palette tokens mirror net_distance_ph/view_app.html (Explorer v2).
+*/
+
+/* LIGHT · Explorer */
+[data-md-color-scheme="default"] {
+  color-scheme: light;
+  --nd-bg: #edf3f6;
+  --nd-panel: #ffffff;
+  --nd-panel2: #f7fafc;
+  --nd-ink: #163142;
+  --nd-muted: #667f90;
+  --nd-border: #d8e5ec;
+  --nd-accent: #0a839b;
+  --nd-accentbg: #e1f4f7;
+  --nd-near: #427fae;
+  --nd-nearbg: #e5eef7;
+  --nd-grid: #d6e4ec;
+  --nd-shadow: 0 1px 5px #00283a08;
+  --nd-code: #f3f7f9;
+  --nd-footer: #e5edf2;
+  --md-default-bg-color: var(--nd-bg);
+  --md-default-fg-color: var(--nd-ink);
+  --md-default-fg-color--light: var(--nd-muted);
+  --md-default-fg-color--lighter: #849cab;
+  --md-default-fg-color--lightest: #cbdce5;
+  --md-primary-fg-color: var(--nd-accent);
+  --md-accent-fg-color: var(--nd-accent);
+  --md-typeset-a-color: var(--nd-accent);
+  --md-code-bg-color: var(--nd-code);
+  --md-code-fg-color: var(--nd-ink);
+  --md-footer-bg-color: var(--nd-footer);
+  --md-footer-fg-color: var(--nd-ink);
+  --md-footer-bg-color--dark: #dce7ee;
+}
+
+/* DARK · Explorer */
+[data-md-color-scheme="slate"] {
+  color-scheme: dark;
+  --nd-bg: #0b1520;
+  --nd-panel: #10212d;
+  --nd-panel2: #172b38;
+  --nd-ink: #e9f5fb;
+  --nd-muted: #a3bbcb;
+  --nd-border: #2b4656;
+  --nd-accent: #67d1df;
+  --nd-accentbg: #1b3b46;
+  --nd-near: #81b5e0;
+  --nd-nearbg: #203d56;
+  --nd-grid: #1e3544;
+  --nd-shadow: none;
+  --nd-code: #162a37;
+  --nd-footer: #0c1c28;
+  --md-default-bg-color: var(--nd-bg);
+  --md-default-fg-color: var(--nd-ink);
+  --md-default-fg-color--light: var(--nd-muted);
+  --md-default-fg-color--lighter: #829eaf;
+  --md-default-fg-color--lightest: #3f5968;
+  --md-primary-fg-color: var(--nd-accent);
+  --md-accent-fg-color: var(--nd-accent);
+  --md-typeset-a-color: var(--nd-accent);
+  --md-code-bg-color: var(--nd-code);
+  --md-code-fg-color: var(--nd-ink);
+  --md-footer-bg-color: var(--nd-footer);
+  --md-footer-fg-color: var(--nd-muted);
+  --md-footer-bg-color--dark: #09141c;
+}
+
+/* Common shell: Explorer-style white/charcoal header and edged panels. */
+body, .md-container, .md-main { background: var(--nd-bg); }
+.md-header {
+  background: var(--nd-panel);
+  color: var(--nd-ink);
+  border-bottom: 1px solid var(--nd-border);
+  box-shadow: var(--nd-shadow);
+}
+.md-header--shadow, .md-header--lifted { box-shadow: var(--nd-shadow); }
+.md-header__title {
+  font-weight: 780;
+  letter-spacing: .085em;
+  text-transform: uppercase;
+}
+.md-header__topic { font-size: .79rem; }
+.md-header__button, .md-header__source { color: var(--nd-ink); }
+.md-header__button:hover, .md-header__source:hover { color: var(--nd-accent); }
+.md-header__button.md-logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 .35rem 0 0;
+  padding: 0;
+}
+.md-header__button.md-logo img, .md-header__button.md-logo svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.md-header__option, .md-header__source { align-self: center; }
+.md-header__option .md-header__button {
+  border: 1px solid var(--nd-border);
+  border-radius: 8px;
+  background: var(--nd-panel2);
+  margin: .3rem .2rem;
+}
+.md-header__option .md-header__button:hover { background: var(--nd-accentbg); }
+
+/* Search follows Explorer input styling; retain MkDocs' search behavior. */
+.md-search__form {
+  background: var(--nd-panel2);
+  border: 1px solid var(--nd-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.md-search__form:hover, .md-search__form:focus-within { background: var(--nd-panel); }
+.md-search__input { color: var(--nd-ink); }
+.md-search__input::placeholder { color: var(--nd-muted); opacity: 1; }
+.md-search__icon, .md-search__input + .md-search__icon { color: var(--nd-muted); }
+.md-search__output, .md-search-result {
+  background: var(--nd-panel);
+  color: var(--nd-ink);
+  border-radius: 0 0 9px 9px;
+}
+.md-search-result__link:hover { background: var(--nd-accentbg); }
+
+/* Sidebars: location-selection/ranking-panel vocabulary, same page tree. */
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary .md-sidebar__scrollwrap,
+  .md-sidebar--secondary .md-sidebar__scrollwrap {
+    background: var(--nd-panel);
+    border: 1px solid var(--nd-border);
+    border-radius: 10px;
+    padding: .45rem .55rem .9rem;
+    box-shadow: var(--nd-shadow);
+  }
+  .md-sidebar__scrollwrap { scrollbar-color: var(--nd-border) transparent; }
+}
+.md-nav__title {
+  color: var(--nd-muted);
+  font-size: .66rem;
+  line-height: 1.5;
+  font-weight: 800;
+  letter-spacing: .115em;
+  text-transform: uppercase;
+}
+.md-nav__item .md-nav__link {
+  color: var(--nd-muted);
+  border-radius: 7px;
+  padding: .34rem .5rem;
+  margin: .05rem 0;
+  transition: background-color .14s ease, color .14s ease;
+}
+.md-nav__item .md-nav__link:hover,
+.md-nav__item .md-nav__link:focus-visible {
+  background: var(--nd-panel2);
+  color: var(--nd-accent);
+}
+.md-nav__item .md-nav__link--active,
+.md-nav__link--active {
+  color: var(--nd-accent) !important;
+  font-weight: 750;
+  background: var(--nd-accentbg);
+}
+.md-sidebar--secondary .md-nav__link--active { background: var(--nd-nearbg); }
+.md-nav__link .md-ellipsis { overflow-wrap: anywhere; }
+
+/* Reading surface: calm panel, not a replacement for any existing article. */
+.md-content__inner {
+  background: var(--nd-panel);
+  border: 1px solid var(--nd-border);
+  border-radius: 11px;
+  box-shadow: var(--nd-shadow);
+  padding: 1.65rem 1.85rem 2.5rem;
+  margin-top: .8rem;
+  margin-bottom: 1.3rem;
+  min-width: 0;
+}
+.md-typeset { color: var(--nd-ink); line-height: 1.66; }
+.md-typeset h1, .md-typeset h2, .md-typeset h3, .md-typeset h4 {
+  color: var(--nd-ink);
+  font-weight: 750;
+  letter-spacing: -.025em;
+}
+.md-typeset h1 {
+  font-size: 1.95rem;
+  letter-spacing: -.035em;
+  padding-bottom: .7rem;
+  border-bottom: 1px solid var(--nd-border);
+  margin-bottom: 1.1rem;
+}
+.md-typeset h2 { margin-top: 1.9em; padding-bottom: .3rem; border-bottom: 1px solid var(--nd-border); }
+.md-typeset h3 { margin-top: 1.55em; }
+.md-typeset a:not(.md-button) { text-decoration-color: transparent; text-underline-offset: .16em; }
+.md-typeset a:not(.md-button):hover { text-decoration-color: currentColor; }
+.md-typeset hr { border-color: var(--nd-border); }
+
+/* Dataset-like tables and well-defined code blocks. */
+.md-typeset table:not([class]) {
+  background: var(--nd-panel);
+  border: 1px solid var(--nd-border);
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: none;
+}
+.md-typeset table:not([class]) th {
+  background: var(--nd-panel2);
+  color: var(--nd-muted);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th { border-bottom: 1px solid var(--nd-border); }
+.md-typeset table:not([class]) tr:hover { background: var(--nd-panel2); }
+.md-typeset .highlight, .md-typeset .highlighttable,
+.md-typeset pre, .md-typeset .tabbed-set {
+  border-radius: 9px;
+}
+.md-typeset .highlight, .md-typeset pre {
+  background: var(--nd-code);
+  border: 1px solid var(--nd-border);
+  box-shadow: none;
+}
+.md-typeset code { border-radius: 4px; }
+.md-typeset :not(pre) > code { border: 1px solid var(--nd-border); }
+.md-clipboard { color: var(--nd-muted); }
+.md-clipboard:hover { color: var(--nd-accent); }
+.md-typeset blockquote { border-left-color: var(--nd-near); color: var(--nd-muted); }
+
+/* Keep all existing admonition types, tabs, links and tables functional. */
+.md-typeset .admonition, .md-typeset details {
+  background: var(--nd-panel2);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--nd-border);
+}
+.md-typeset .admonition-title, .md-typeset summary { background-color: var(--nd-accentbg); }
+.md-typeset .md-button {
+  border-radius: 8px;
+  border-color: var(--nd-border);
+  color: var(--nd-accent);
+}
+.md-typeset .md-button:hover { background: var(--nd-accentbg); border-color: var(--nd-accent); }
+.md-typeset .md-button--primary { background: var(--nd-accent); border-color: var(--nd-accent); color: var(--nd-panel); }
+.md-tabs { background: var(--nd-panel); color: var(--nd-ink); border-bottom: 1px solid var(--nd-border); }
+.md-tabs__link--active { color: var(--nd-accent); }
+.md-footer, .md-footer-meta { background: var(--nd-footer); color: var(--nd-muted); }
+.md-footer__link:hover, .md-footer-meta a:hover { color: var(--nd-accent); }
+
+/* Accessibility; keyboard focus is retained even on custom-colored controls. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+.md-nav__link:focus-visible, .md-header__button:focus-visible {
+  outline: 2px solid var(--nd-accent);
+  outline-offset: 2px;
+}
+::selection { background: var(--nd-accentbg); color: var(--nd-ink); }
+
+/* Adapt presentation only; never hide navigation or move page sections. */
+@media screen and (max-width: 76.24em) {
+  .md-content__inner { padding: 1.3rem 1.3rem 2rem; }
+  .md-nav--primary { background: var(--nd-panel); }
+  .md-nav--primary .md-nav__title { background: var(--nd-panel2); color: var(--nd-ink); }
+}
+@media screen and (max-width: 44.99em) {
+  .md-content__inner {
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1.15rem 1.1rem 1.8rem;
+  }
+  .md-header__title { letter-spacing: .035em; }
+  .md-typeset h1 { font-size: 1.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-nav__item .md-nav__link { transition: none; }
+}
