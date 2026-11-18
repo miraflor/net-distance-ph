@@ -300,3 +300,41 @@ path is inconclusive outside the search window. Ferry routes are reported as
 nearby ways but are not included in the inspector's road-only BFS scenarios.
 
 No network edges, source data, model outputs, or routing parameters change.
+
+## Population-origin snap sensitivity audit (v52)
+
+Review population origins in isolated components **without changing their snaps**:
+
+```powershell
+# Same components as urban OSM investigation; ranks match v50 priority components.
+net-distance-ph audit-origin-snap --ranks 2 6 7 8 9
+# Or top 15 non-main components:
+net-distance-ph audit-origin-snap
+```
+
+Reads the existing population core's original-node indices, saved snap offsets,
+positive-population barangay origins, representative sites, and exact graph
+connectivity. Loads the **original geometry source** only when all its SHA-256
+files match the core metadata; tries the existing pinned cache and population
+reference points, never downloads. An explicitly supplied `--points-file PATH`
+must also match the recorded hash. No geometry can be inferred from snapped
+vertices alone. The default full original graph creates a potentially large
+KD-tree of main-component road nodes and may require several GiB of RAM.
+
+For each selected non-main component, the command finds the nearest *road node*
+in the largest populated component by ECEF chord, reports its WGS84 geodesic
+origin offset, and compares it with the original run's saved snap offset.
+Marks whether that alternative lies inside the **same run's** `max_snap_km`
+limit. This is a distance-based *sensitivity test*, not permission to move
+population, add a missing road, override access restrictions, or reroute a town.
+It does NOT prove legal vehicle or pedestrian access, nor establish physical
+connection across water, bridges, or private properties. Near-ties in ECEF
+ranking may differ from exact WGS84 nearest-road rankings.
+
+CSV and JSON outputs: `workspace/output/origin_snap_sensitivity/<routing_prefix>/`
+- `affected_barangay_origins.csv`: the saved choice and alternative per barangay
+- `component_sensitivity.csv`: affected population and within-radius fractions
+- `origin_snap_sensitivity.json`: SHA-256 provenance and scientific cautions
+
+Results from the earlier v51 OSM audit about restricted roads are independent
+context; **no restricted-road paths are treated as routable** in v52.

@@ -146,6 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--radius-m", type=float, default=1000.0,
                    help="local OSM way inspection radius in metres (100..10000; default 1000)")
 
+    p = sub.add_parser("audit-origin-snap", help="read-only population origin snapping sensitivity against main graph component")
+    p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
+    p.add_argument("--run-dir", type=Path, help="existing population-weighted routing run (default latest)")
+    p.add_argument("--points-file", type=Path, help="original point geometry source if no matching cached default is found")
+    p.add_argument("--top", type=int, default=15, help="largest nonmain populated components to audit (default 15)")
+    p.add_argument("--ranks", nargs="+", type=int, help="specific original v50 priority ranks, e.g. 2 6 7 8 9")
+
     # Optional population-weighted matrices; baseline run stages remain unchanged.
     p = sub.add_parser("population-weighted", help="optional population-weighted network distance matrices")
     from .population_weighted import add_run_arguments
@@ -336,6 +343,15 @@ def main(argv: list[str] | None = None) -> int:
             return reset_run(args)
         except (ValueError, OSError, RuntimeError) as exc:
             print(f"RESET REFUSED: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "audit-origin-snap":
+        from .origin_snap_audit import execute as origin_snap_execute
+        from .workspace import run_log
+        try:
+            with run_log(workspace_path(args.workspace)):
+                return origin_snap_execute(args)
+        except (OSError, ValueError, RuntimeError, KeyError, ImportError) as exc:
+            print(log_prefix() + f" ORIGIN SNAP AUDIT REFUSED: {exc}", file=sys.stderr)
             return 2
     if args.command == "inspect-topology-osm":
         from .topology_osm_investigation import execute as osm_investigation
