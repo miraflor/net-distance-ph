@@ -51,14 +51,14 @@ def test_population_weighted_persists_timestamps_and_duration(tmp_path, monkeypa
     monkeypatch.setattr(routing, "run", lambda args: print("synthetic routing event") or 0)
     assert run_options(Namespace(workspace=tmp_path, heartbeat_seconds=30.0)) == 0
     output = capsys.readouterr().out
-    assert re.search(r"\[\d{2}:\d{2}:\d{2}\] START: population-weighted", output)
-    assert "DONE: population-weighted (total); elapsed" in output
+    assert re.search(r"\[\d{2}:\d{2}:\d{2} e=\d+:\d{2}(?::\d{2})?\] START: population-weighted", output)
+    assert "DONE: population-weighted (total) (" in output
     logs = list((tmp_path / "logs").glob("run-*.log"))
     assert len(logs) == 1
     content = logs[0].read_text(encoding="utf-8")
-    assert re.search(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]", content)
+    assert re.search(r"\[\d{2}:\d{2}:\d{2} e=\d+:\d{2}(?::\d{2})?\]", content)
     assert "synthetic routing event" in content
-    assert "DONE: population-weighted (total); elapsed" in content
+    assert "DONE: population-weighted (total) (" in content
 
 
 def test_population_weighted_rejects_bad_heartbeat(tmp_path):

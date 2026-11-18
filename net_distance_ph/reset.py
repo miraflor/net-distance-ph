@@ -17,6 +17,11 @@ import subprocess
 import sys
 import time
 
+# Unified reset logging (v47)
+from .workspace import format_elapsed
+
+_PIPELINE_STARTED_MONO = time.monotonic()
+
 CONFIRM = "RESET NET-DISTANCE-PH TO ZERO"
 # Only names of bundles/installers created in these conversations; no globbing.
 PATCH_DOWNLOAD_NAMES = (
@@ -43,7 +48,9 @@ PATCH_BACKUP_NAMES = (
 
 
 def _say(message):
-    print(f"[{datetime.now().astimezone():%Y-%m-%d %H:%M:%S%z}] {message}", flush=True)
+    stamp = datetime.now().strftime("%H:%M:%S")
+    run = format_elapsed(time.monotonic() - _PIPELINE_STARTED_MONO)
+    print(f"[{stamp} e={run}] {message}", flush=True)
 
 
 def _git(repo, *args, check=True):
@@ -148,10 +155,14 @@ def _run_from_zero(repo, workspace, *, branch, commit, workers, heartbeat):
                                  "--median-selection", "balanced", "--workers", str(workers),
                                  "--heartbeat-seconds", str(heartbeat)]),
     ]
+    global _PIPELINE_STARTED_MONO
     started_total = time.monotonic()
+    _PIPELINE_STARTED_MONO = started_total
+    env["NET_DISTANCE_PH_PIPELINE_STARTED_UTC"] = datetime.now().astimezone().isoformat()
+    env["NET_DISTANCE_PH_JOURNAL_PATH"] = str(journal.resolve())
     results = []
     for name, argv in stages:
-        started = datetime.now().astimezone().isoformat(timespec="seconds")
+        started = datetime.now().isoformat(timespec="seconds")
         with journal.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"event": "start", "stage": name, "at": started, "argv": argv}) + "\n")
             f.flush()
@@ -164,7 +175,7 @@ def _run_from_zero(repo, workspace, *, branch, commit, workers, heartbeat):
             code = 130
         elapsed = round(time.monotonic() - t, 3)
         result = {"stage": name, "exit_code": code, "elapsed_seconds": elapsed,
-                  "started_at": started, "finished_at": datetime.now().astimezone().isoformat(timespec="seconds")}
+                  "started_at": started, "finished_at": datetime.now().isoformat(timespec="seconds")}
         results.append(result)
         with journal.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"event": "finish", **result}) + "\n")
@@ -174,10 +185,20 @@ def _run_from_zero(repo, workspace, *, branch, commit, workers, heartbeat):
         if code:
             break
     complete = len(results) == len(stages) and all(r["exit_code"] == 0 for r in results)
-    summary.write_text(json.dumps({"schema": "net-distance-ph/fresh-run/v46",
+    # Phases are measured inside the worker subprocesses. Record them in the
+    # same summary without adding nested durations to the top-level elapsed time.
+    phases = []
+    with journal.open("r", encoding="utf-8") as fd:
+        for line in fd:
+            entry = json.loads(line)
+            if entry.get("event") in ("phase_finish", "phase_failed"):
+                phases.append({key: entry[key] for key in
+                               ("event", "at", "session_id", "phase", "elapsed_seconds", "status", "error_type")
+                               if key in entry})
+    summary.write_text(json.dumps({"schema": "net-distance-ph/fresh-run/v47",
        "status": "complete" if complete else "failed", "git_branch": branch, "git_commit": commit,
        "workspace": str(workspace), "total_elapsed_seconds": round(time.monotonic()-started_total, 3),
-       "stages": results, "journal": str(journal)}, indent=2) + "\n", encoding="utf-8")
+       "stages": results, "phases": phases, "journal": str(journal)}, indent=2) + "\n", encoding="utf-8")
     _say(f"TIMING SUMMARY: {summary}")
     _say(f"EVENT JOURNAL: {journal}")
     return 0 if complete else (results[-1]["exit_code"] or 2)

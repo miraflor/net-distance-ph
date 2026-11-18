@@ -11,29 +11,26 @@ from net_distance_ph.workspace import _TimestampStream
 from net_distance_ph import reduce as reduction
 import run
 
-CONSOLE = r'\[\d{2}:\d{2}:\d{2}\] '
-ARCHIVE = r'\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] '
+CONSOLE = r'\[\d{2}:\d{2}:\d{2} e=\d+:\d{2}(?::\d{2})?\] '
+ARCHIVE = CONSOLE
 
 
-def test_console_archive_are_short_unclassified_and_timezone_free():
+def test_console_archive_have_matching_short_timestamp_and_run_clock():
     display, archive = io.StringIO(), io.StringIO()
     stream = _TimestampStream(display, archive, threading.RLock(), 'INFO')
     stream.write('graph done\nsecond message\n')
-    assert re.fullmatch(f'{CONSOLE}graph done\\n{CONSOLE}second message\\n', display.getvalue())
-    assert re.fullmatch(f'{ARCHIVE}graph done\\n{ARCHIVE}second message\\n', archive.getvalue())
-    for value in (display.getvalue(), archive.getvalue()):
-        assert 'INFO' not in value
-        assert '+08:00' not in value
-        assert 'UTC' not in value
-        assert not re.search(r'\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}', value)
+    assert re.fullmatch(f'{CONSOLE}graph done\n{CONSOLE}second message\n', display.getvalue())
+    assert display.getvalue() == archive.getvalue()
+    assert 'INFO' not in display.getvalue()
+    assert 'UTC' not in display.getvalue()
 
 
 def test_stderr_does_not_automatically_become_error():
     display, archive = io.StringIO(), io.StringIO()
     stream = _TimestampStream(display, archive, threading.RLock(), 'ERROR')
     stream.write('ordinary warning from library\nERROR: a real error\n')
-    assert re.fullmatch(f'{CONSOLE}ordinary warning from library\\n{CONSOLE}ERROR: a real error\\n', display.getvalue())
-    assert re.fullmatch(f'{ARCHIVE}ordinary warning from library\\n{ARCHIVE}ERROR: a real error\\n', archive.getvalue())
+    assert re.fullmatch(f'{CONSOLE}ordinary warning from library\n{CONSOLE}ERROR: a real error\n', display.getvalue())
+    assert display.getvalue() == archive.getvalue()
     assert display.getvalue().count('ERROR:') == 1
 
 
@@ -47,12 +44,12 @@ def test_partial_multiline_stream_is_not_reprefixed():
     assert archive.getvalue().count('[') == 2
 
 
-def test_reduction_secondary_log_has_local_date_without_timezone(tmp_path, capsys):
+def test_reduction_secondary_log_uses_shared_short_elapsed_clock(tmp_path, capsys):
     target = tmp_path / 'reduce_progress.log'
     emit = run._make_reduce_logger(target)
     emit('phase 1/7 leaf pruning')
     assert capsys.readouterr().out == 'phase 1/7 leaf pruning\n'
-    assert re.fullmatch(f'{ARCHIVE}phase 1/7 leaf pruning\\n', target.read_text(encoding='utf-8'))
+    assert re.fullmatch(f'{ARCHIVE}phase 1/7 leaf pruning\n', target.read_text(encoding='utf-8'))
 
 
 def test_reduction_passes_have_no_embedded_time_or_timezone():

@@ -30,6 +30,8 @@ from .population_data import load_plain_dataset, export_bundled_defaults
 from contextvars import ContextVar as _PwContextVar
 from functools import wraps as _pw_wraps
 from .workspace import timed_step as _pw_timed_step
+# Unified routing progress instrumentation (v47)
+from .workspace import progress_event as _pw_progress
 
 _PW_HEARTBEAT_SECONDS = _PwContextVar("pw_heartbeat_seconds", default=30.0)
 
@@ -459,7 +461,7 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
                 if count%16==0 or count==len(todo):
                     persist()
                 if count%max(1,len(todo)//10)==0 or count==len(todo):
-                    print(f"  routing progress {count:,}/{len(todo):,} new source nodes; elapsed {time.monotonic() - routing_progress_started:.1f}s",flush=True)
+                    _pw_progress("OD routing", count, len(todo), routing_progress_started, unit="new source nodes")
             if proc is not None:
                 proc.close();proc.join();proc=None
         except BaseException:

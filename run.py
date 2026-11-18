@@ -326,7 +326,7 @@ def _make_reduce_logger(log_path):
         with lock:
             print(message, flush=True)
             with open(log_path, "a", encoding="utf-8") as fh:
-                fh.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}\n")
+                fh.write(f"{WS.log_prefix()} {message}\n")
                 fh.flush()
     return log
 

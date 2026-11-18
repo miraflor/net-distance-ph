@@ -131,3 +131,19 @@ adaptive k-medians and Faeldon barangay geometry. This is independent of the
 centroid-based reduce/matrix pipeline. Fresh-run journal/summary and timestamped
 stage logs are stored under `~/Documents/net-distance-ph/logs/`.
 
+## Compact elapsed-time logs (v47.1)
+
+All logged console and archive lines now use the same short local timestamp
+(no date or timezone) and a compact `e=MM:SS` cumulative elapsed clock. When launched
+by `net-distance-ph reset --all --execute --run`, the run clock begins before
+`prepare` and continues through all subprocess stages. For an individual CLI
+command, it begins when that command starts. Stage messages carry
+a compact stage duration, with precise seconds in the JSON journal. Nested phases print
+only the deepest active heartbeat.
+
+Each session writes both a `run-*.log` and a `run-*.jsonl` in workspace
+`logs/`. Fresh-reset runs append phase and routing progress events directly to
+`fresh_run_journal.jsonl`; `fresh_run_summary.json` includes the measured
+`phases` as well as the three outer stages. Routing ETA is an estimate from
+observed processing speed, not a guaranteed finish time. Historical logs
+remain unchanged. Installing logging never invalidates or recomputes matrices.

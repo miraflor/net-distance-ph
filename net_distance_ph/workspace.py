@@ -30,15 +30,95 @@ def paths(workspace):
             "output": workspace / "output", "logs": workspace / "logs"}
 
 
-class _TimestampStream:
-    """Prefix each output line and tee it to the run log (thread-safe)."""
+# Unified runtime observability (v47). This is shared by every pipeline stage.
+from contextvars import ContextVar as _ContextVar
+from datetime import timezone as _timezone
 
-    def __init__(self, stream, logfile, lock, label):
+_ACTIVE_TRACE = _ContextVar("net_distance_ph_active_trace", default=None)
+_RUN_ORIGIN = _ContextVar("net_distance_ph_run_origin", default=None)
+_DEFAULT_ORIGIN = datetime.now(_timezone.utc)
+
+
+def format_elapsed(seconds):
+    """Monotonic elapsed-time display, rounded down to whole seconds."""
+    seconds = max(0, int(seconds))
+    hours, rem = divmod(seconds, 3600)
+    minutes, secs = divmod(rem, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
+
+
+def _iso_now():
+    # Local wall clock for human-readable records, intentionally no UTC offset.
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def log_prefix(origin=None):
+    """One formatter for session logs and secondary progress logs."""
+    if origin is None:
+        origin = _RUN_ORIGIN.get()
+        if origin is None:
+            inherited = os.environ.get("NET_DISTANCE_PH_PIPELINE_STARTED_UTC")
+            origin = (datetime.fromisoformat(inherited).astimezone(_timezone.utc)
+                      if inherited else _DEFAULT_ORIGIN)
+    elapsed = (datetime.now(_timezone.utc) - origin).total_seconds()
+    return f"[{datetime.now():%H:%M:%S} e={format_elapsed(elapsed)}]"
+
+
+class _RunTrace:
+    """A small append-only event journal, independent of the numeric pipeline."""
+
+    def __init__(self, workspace, logfile):
+        self.lock = threading.RLock()
+        self.stack = []
+        self.sequence = 0
+        self.session_id = logfile.stem
+        external = os.environ.get("NET_DISTANCE_PH_JOURNAL_PATH")
+        if external:
+            journal = Path(external).expanduser().resolve()
+            root = (Path(workspace).resolve() / "logs")
+            if journal.parent != root:
+                raise ValueError("Run journal must reside within workspace/logs")
+            self.journal_path = journal
+        else:
+            self.journal_path = logfile.with_suffix(".jsonl")
+
+    def record(self, event, **fields):
+        payload = {"event": event, "at": _iso_now(), "session_id": self.session_id, **fields}
+        with self.lock:
+            self.journal_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.journal_path.open("a", encoding="utf-8", newline="\n") as output:
+                output.write(json.dumps(payload, sort_keys=True, allow_nan=False) + "\n")
+
+    def enter(self, label):
+        with self.lock:
+            self.sequence += 1
+            ident = self.sequence
+            parent = self.stack[-1][0] if self.stack else None
+            self.stack.append((ident, label))
+        self.record("phase_start", phase_id=ident, parent_id=parent, phase=label)
+        return ident, parent
+
+    def leave(self, ident):
+        with self.lock:
+            if not self.stack or self.stack[-1][0] != ident:
+                raise RuntimeError("Timing phases must be exited in nested order")
+            self.stack.pop()
+
+    def current(self, ident):
+        with self.lock:
+            return bool(self.stack and self.stack[-1][0] == ident)
+
+
+class _TimestampStream:
+    """Compact timezone-free local clock and cumulative elapsed time."""
+
+    def __init__(self, stream, logfile, lock, label, origin=None):
         self._stream = stream
         self._logfile = logfile
         self._lock = lock
         self._label = label
         self._start = True
+        self._origin = origin or datetime.now(_timezone.utc)
 
     def write(self, value):
         if not isinstance(value, str):
@@ -49,11 +129,9 @@ class _TimestampStream:
         with self._lock:
             for chunk in normalized.splitlines(keepends=True):
                 if self._start:
-                    # Console: short local clock; archive: local date and time.
-                    # Neither stores timezone, UTC offset, or a synthetic severity.
-                    when = datetime.now()
-                    self._stream.write(f"[{when:%H:%M:%S}] ")
-                    self._logfile.write(f"[{when:%Y-%m-%d %H:%M:%S}] ")
+                    prefix = log_prefix(self._origin) + " "
+                    self._stream.write(prefix)
+                    self._logfile.write(prefix)
                 self._stream.write(chunk)
                 self._logfile.write(chunk)
                 self._start = chunk.endswith("\n")
@@ -81,45 +159,89 @@ class _TimestampStream:
 def run_log(workspace):
     directory = Path(workspace) / "logs"
     directory.mkdir(parents=True, exist_ok=True)
-    filename = datetime.now().astimezone().strftime("run-%Y%m%d-%H%M%S")
+    filename = datetime.now().astimezone().strftime("run-%Y%m%d-%H%M%S-%f")
     log_path = directory / f"{filename}-{os.getpid()}.log"
+    source = os.environ.get("NET_DISTANCE_PH_PIPELINE_STARTED_UTC")
+    try:
+        origin = datetime.fromisoformat(source).astimezone(_timezone.utc) if source else datetime.now(_timezone.utc)
+    except ValueError as exc:
+        raise ValueError("Invalid NET_DISTANCE_PH_PIPELINE_STARTED_UTC") from exc
     stdout, stderr = sys.stdout, sys.stderr
     lock = threading.RLock()
+    trace = _RunTrace(workspace, log_path)
     with log_path.open("x", encoding="utf-8", buffering=1) as logfile:
-        to_out = _TimestampStream(stdout, logfile, lock, "INFO")
-        to_err = _TimestampStream(stderr, logfile, lock, "ERROR")
-        sys.stdout, sys.stderr = to_out, to_err
+        out = _TimestampStream(stdout, logfile, lock, "INFO", origin)
+        err = _TimestampStream(stderr, logfile, lock, "ERROR", origin)
+        sys.stdout, sys.stderr = out, err
+        token = _ACTIVE_TRACE.set(trace)
+        clock_token = _RUN_ORIGIN.set(origin)
         try:
             print(f"Run log: {log_path}")
+            print(f"Event journal: {trace.journal_path}")
             yield log_path
         finally:
-            to_out.flush()
-            to_err.flush()
+            _ACTIVE_TRACE.reset(token)
+            _RUN_ORIGIN.reset(clock_token)
+            out.flush()
+            err.flush()
             sys.stdout, sys.stderr = stdout, stderr
 
 
 @contextmanager
 def timed_step(name, heartbeat_seconds=30):
-    """Report stage start/end, and liveness without claiming numerical progress."""
+    """One heartbeat for the deepest active phase; journal start and finish."""
     started = time.monotonic()
+    trace = _ACTIVE_TRACE.get()
+    phase_id, _ = trace.enter(name) if trace is not None else (None, None)
     stop = threading.Event()
+
     def heartbeat():
         while not stop.wait(heartbeat_seconds):
-            print(f"STILL RUNNING: {name}; elapsed {time.monotonic() - started:.1f}s", flush=True)
+            if trace is None or trace.current(phase_id):
+                print(f"STILL RUNNING: {name} ({format_elapsed(time.monotonic() - started)})", flush=True)
+
     thread = threading.Thread(target=heartbeat, daemon=True, name="net-distance-ph-heartbeat")
     print(f"START: {name}", flush=True)
     thread.start()
     try:
         yield
     except BaseException as exc:
-        print(f"FAILED: {name}; elapsed {time.monotonic() - started:.1f}s; "
+        duration = time.monotonic() - started
+        print(f"FAILED: {name} ({format_elapsed(duration)}); "
               f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        if trace is not None:
+            trace.record("phase_failed", phase=name, phase_id=phase_id,
+                         elapsed_seconds=round(duration, 3), error_type=type(exc).__name__, error=str(exc))
         raise
     else:
-        print(f"DONE: {name}; elapsed {time.monotonic() - started:.1f}s", flush=True)
+        duration = time.monotonic() - started
+        print(f"DONE: {name} ({format_elapsed(duration)})", flush=True)
+        if trace is not None:
+            trace.record("phase_finish", phase=name, phase_id=phase_id,
+                         elapsed_seconds=round(duration, 3), status="complete")
     finally:
         stop.set()
         thread.join(timeout=1)
+        if trace is not None:
+            trace.leave(phase_id)
+
+
+def progress_event(name, completed, total, started, *, unit="items"):
+    """Measured processed-source throughput, simple observed-rate ETA, JSONL event."""
+    if total <= 0 or completed < 0 or completed > total:
+        raise ValueError("Invalid progress counters")
+    elapsed = max(0.0, time.monotonic() - started)
+    speed = completed / elapsed if elapsed > 0 else 0.0
+    eta = (total - completed) / speed if speed > 0 else None
+    eta_text = format_elapsed(eta) if eta is not None else "unknown"
+    print(f"{name} {completed:,}/{total:,} ({completed/total:.0%}) | "
+          f"{speed:.1f}/s | ETA {eta_text}", flush=True)
+    trace = _ACTIVE_TRACE.get()
+    if trace is not None:
+        trace.record("progress", phase=name, completed=int(completed), total=int(total),
+                     unit=unit, elapsed_seconds=round(elapsed, 3),
+                     rate_per_second=round(speed, 4),
+                     eta_seconds=round(eta, 3) if eta is not None else None)
 
 
 def _selected(root, pointer_name, filename_by_key):

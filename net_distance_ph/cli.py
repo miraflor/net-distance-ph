@@ -16,7 +16,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .workspace import paths, workspace_path
+from .workspace import paths, workspace_path, log_prefix
 
 STAGES = ("prepare", "graph", "connectivity", "reduce", "matrix", "verify")
 DIRECT_STAGES = STAGES
@@ -187,7 +187,7 @@ def _invoke_stage(stage: str, args: argparse.Namespace) -> int:
     # invocable as a legacy script from the checkout). Running it in a fresh
     # process avoids leaking the mutable global config into the next stage.
     command = [sys.executable, "-m", "run", *_stage_args(stage, args)]
-    print("\n>>> net-distance-ph: " + stage, flush=True)
+    print(log_prefix() + " >>> net-distance-ph: " + stage, flush=True)
     try:
         level = getattr(args, "boundary_level", "town")
         env = dict(os.environ)
@@ -216,19 +216,19 @@ def _selection(args: argparse.Namespace) -> tuple[str, ...]:
 
 def _perform(args: argparse.Namespace) -> int:
     stages = _selection(args)
-    print("Stage plan: " + " -> ".join(stages), flush=True)
+    print(log_prefix() + " Stage plan: " + " -> ".join(stages), flush=True)
     if getattr(args, "boundary_level", "town") != "town":
-        print(f"Boundary level: {args.boundary_level}; isolated workspace: {_effective_workspace(args)}", flush=True)
+        print(log_prefix() + f" Boundary level: {args.boundary_level}; isolated workspace: {_effective_workspace(args)}", flush=True)
     if "connectivity" in stages:
-        print("Connectivity is a gate: disconnected or missing towns stop this run.", flush=True)
+        print(log_prefix() + " Connectivity is a gate: disconnected or missing towns stop this run.", flush=True)
     for stage in stages:
         exit_code = _invoke_stage(stage, args)
         if exit_code != 0:
-            print(f"STOPPED at {stage} (exit {exit_code}). Later stages were not run.", file=sys.stderr)
+            print(log_prefix() + f" STOPPED at {stage} (exit {exit_code}). Later stages were not run.", file=sys.stderr)
             if stage == "prepare" or stage == "graph":
-                print("Inspect boundary reconciliation and source-preparation logs before proceeding.", file=sys.stderr)
+                print(log_prefix() + " Inspect boundary reconciliation and source-preparation logs before proceeding.", file=sys.stderr)
             return exit_code
-    print("ALL REQUESTED STAGES COMPLETED. Review model limitations and verification outputs.", flush=True)
+    print(log_prefix() + " ALL REQUESTED STAGES COMPLETED. Review model limitations and verification outputs.", flush=True)
     return 0
 
 
