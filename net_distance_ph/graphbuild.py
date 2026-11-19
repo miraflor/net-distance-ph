@@ -31,6 +31,29 @@ from .geo import chord_to_arc_km, geodesic_km, lonlat_to_ecef
 
 ROAD, FERRY, GANGWAY = 0, 1, 2
 
+# How ``build_graph`` marks ferry terminals (``flags[:, 2]``), the only nodes
+# that may receive a gangway edge or, optionally, a fallback snap.
+#
+# "part_endpoint" (historical): the first and last vertex of every ferry
+#     polyline part. Correct when each part is one complete crossing. When OSM
+#     stores one crossing as several ways, the point where two ways meet is
+#     also marked, and it can receive a gangway edge although no ferry stops
+#     there.
+# "ferry_degree_1": a part endpoint that touches exactly one ferry segment.
+#     Excludes the meeting points of split ways, but also excludes a port where
+#     two or more separate ferry lines end on the same node: such a port then
+#     receives no gangway edge unless a road already touches it.
+#
+# The shapefile layers carry no route-relation membership, so the two cases
+# cannot be separated from the graph alone; the choice is a modeling decision.
+FERRY_TERMINAL_RULES = ("part_endpoint", "ferry_degree_1")
+
+
+def ferry_degree(u, v, code, n_nodes):
+    """Number of ferry segments touching each node (roads and gangways ignored)."""
+    m = code == FERRY
+    return np.bincount(np.concatenate([u[m], v[m]]), minlength=n_nodes)
+
 
 def node_coordinates(xy, snap_decimals=6):
     """Map raw vertices to node ids by rounded coordinate.
@@ -50,13 +73,19 @@ def node_coordinates(xy, snap_decimals=6):
     return inv.astype(np.int64), node_lonlat
 
 
-def build_graph(layers, snap_decimals=6, geodesic_backend="auto", verbose=True):
+def build_graph(layers, snap_decimals=6, geodesic_backend="auto", verbose=True,
+                ferry_terminal_rule="part_endpoint"):
     """Node a list of (Parts, layer_code) into (u, v, w, node_lonlat, layer_flags).
 
     ``layer_flags`` is an (n_nodes, 3) boolean array: column 0 marks nodes
     touched by a road, column 1 nodes touched by a ferry, and column 2 marks
-    endpoints of ferry polyline parts (the only gangway candidates).
+    ferry terminals (the only gangway candidates), as defined by
+    ``ferry_terminal_rule`` (see ``FERRY_TERMINAL_RULES``).
     """
+    if ferry_terminal_rule not in FERRY_TERMINAL_RULES:
+        raise ValueError(
+            f"unknown ferry_terminal_rule {ferry_terminal_rule!r}; expected one of {FERRY_TERMINAL_RULES}"
+        )
     all_xy = np.concatenate([p.xy for p, _ in layers]) if layers else np.empty((0, 2))
     node_of_vertex, node_lonlat = node_coordinates(all_xy, snap_decimals)
     if verbose:
@@ -109,11 +138,24 @@ def build_graph(layers, snap_decimals=6, geodesic_backend="auto", verbose=True):
     if ferry_terminal_nodes:
         flags[np.concatenate(ferry_terminal_nodes), 2] = True
 
+    fdeg = ferry_degree(u, v, code, n)
+    # Part endpoints that continue into exactly one other ferry segment and
+    # touch no road: either the meeting point of a split way or a port where
+    # exactly two ferry lines end. Reported under both rules.
+    joins = flags[:, 2] & ~flags[:, 0] & (fdeg == 2)
+    if ferry_terminal_rule == "ferry_degree_1":
+        flags[:, 2] &= fdeg == 1
+
     if verbose:
         print(
             f"  {u.size:,} segments "
             f"({int((code == ROAD).sum()):,} road, {int((code == FERRY).sum()):,} ferry), "
             f"total length {w.sum():,.0f} km"
+        )
+        print(
+            f"  ferry terminal rule {ferry_terminal_rule!r}: {int(flags[:, 2].sum()):,} terminals; "
+            f"{int(joins.sum()):,} off-road part endpoints join exactly two ferry segments "
+            f"({'excluded' if ferry_terminal_rule == 'ferry_degree_1' else 'kept as terminals'})"
         )
     return u, v, w, code, node_lonlat, flags
 
@@ -151,11 +193,16 @@ def connect_ferries(
         backend=geodesic_backend,
     )
     if verbose:
+        # Degree-2 endpoints can be route splits OR real shared terminals.
+        # This counts actual constructed gangways at those ambiguous nodes;
+        # it does not claim they are false physical connections.
+        ambiguous=int(np.count_nonzero(ferry_degree(u,v,code,len(flags))[gu] == 2))
         print(
             f"  {gu.size:,} terminal gangway edges added; "
             f"{int((~near).sum()):,} offshore ferry terminals had no road "
             f"within {ferry_connect_km} km"
         )
+        print(f"  ambiguous gangways at off-road degree-2 ferry endpoints: {ambiguous:,}")
     return (
         np.concatenate([u, gu]),
         np.concatenate([v, gv]),

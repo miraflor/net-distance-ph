@@ -109,7 +109,8 @@ def bfs_order(A, lonlat=None, verbose=True):
             seen[nxt] = True
             frontier = list(nxt)
     order = np.array(order, dtype=np.int64)
-    assert order.size == n and np.unique(order).size == n
+    if order.size != n or np.unique(order).size != n:
+        raise RuntimeError("BFS order does not visit every source exactly once")
     if verbose and ncomp > 1:
         print(f"  ordering: kNN graph has {ncomp} components, largest first")
     return order

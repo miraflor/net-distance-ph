@@ -17,13 +17,14 @@ import subprocess
 import sys
 import time
 
-# Unified reset logging (v47)
+# Reset logging
 from .workspace import format_elapsed
 
 _PIPELINE_STARTED_MONO = time.monotonic()
 
 CONFIRM = "RESET NET-DISTANCE-PH TO ZERO"
-# Only names of bundles/installers created in these conversations; no globbing.
+# Exact names of earlier development patch bundles and installers that
+# --purge-patch-artifacts may delete; no globbing.
 PATCH_DOWNLOAD_NAMES = (
     "net_distance_ph_adaptive_k_medians_v43.zip",
     "net_distance_ph_adaptive_k_medians_v43",

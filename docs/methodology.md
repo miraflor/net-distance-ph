@@ -94,13 +94,20 @@ With `INCLUDE_SNAP_OFFSET = False`, the connector costs are excluded.
 ## 4. Reduce the graph without altering shortest paths
 
 The original graph can contain millions of shape vertices with degree two.
-The contraction stage removes selected non-source nodes, retaining direct
-shortcuts between their neighbors. For a removed node \(v\), a shortcut
-from \(u\) to \(w\) has weight \(w_{uv}+w_{vw}\). Because it corresponds to
-an actual path, contraction preserves shortest paths for surviving nodes.
+Stage 2 first removes connected components that contain no source. It then
+applies two exact steps (`net_distance_ph.fast_reduce`):
 
-Contraction is constrained by `MAX_CONTRACT_DEGREE` and `MAX_EDGE_GROWTH`,
-so it does not indiscriminately explode edge count. Equal parallel edges are
+1. **Leaf pruning.** A non-source node with one remaining edge cannot lie on
+   a shortest path between two other nodes, so it is removed, repeatedly.
+2. **Chain compression.** A maximal path whose interior nodes all have
+   degree two and are not sources is replaced by one edge whose weight is
+   the sum of the path's edge weights. Because the shortcut corresponds to an
+   actual path, shortest paths between the remaining nodes are unchanged.
+
+Every junction of degree three or more stays in the core. The older
+degree-k contraction (`net_distance_ph.reduce.reduce_to_core`) is no longer
+used by the pipeline and is kept only as a reference implementation for the
+tests. Equal parallel edges are
 deduplicated by their **minimum** weight before CSR construction; ordinary
 sparse-matrix construction can otherwise *sum* duplicate entries incorrectly.
 After contraction, reverse Cuthill–McKee reorders node IDs for locality of

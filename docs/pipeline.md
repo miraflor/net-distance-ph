@@ -82,19 +82,19 @@ python run.py [all|graph|reduce|matrix|verify]
 - `--restart-reduce` discards the compatible stage-2 checkpoint, not
   the stage-1 source artifacts.
 
-Settings also include `SNAP_DECIMALS`, ferry connectors, the centroid snap
-limit, optional endpoint snap offsets, source ordering, the contraction degree
-cap, heartbeat intervals, and verification sample sizes. See the commented
+Settings also include `SNAP_DECIMALS`, ferry connectors and the ferry
+terminal rule, the centroid snap limit, optional endpoint snap offsets, source
+ordering, and verification sample sizes. See the commented
 `config.py` for the complete set.
 
-## Stage 2: long-running contraction
+## Stage 2: graph reduction
 
-The reducer writes timestamped heartbeats and progress messages to
-`work/reduce_progress.log`. Every
-`REDUCE_CHECKPOINT_EVERY_PASSES` completed passes (default 1), it writes an
-atomic `work/reduce_checkpoint.npz`. It checks file sizes, timestamps and
-relevant reduction parameters before resuming. An interruption mid-pass repeats
-that pass; a compatible earlier completed pass remains saved.
+The reducer writes timestamped progress messages to
+`work/reduce_progress.log` between steps. After de-duplication and removal of
+components without towns, it writes an atomic `work/reduce_checkpoint.npz`, so
+an interruption does not repeat those steps. It checks the stage-1 file sizes
+and timestamps before resuming. Checkpoints written by the older degree-k
+contraction are also accepted.
 
 ```bash
 python check_reduce_status.py           # add --work DIR if you used --work
@@ -102,8 +102,8 @@ python run.py reduce                    # resume, if checkpoint exists
 python run.py reduce --restart-reduce   # start this stage from scratch
 ```
 
-The contraction checkpoint signature is an **operational resume guard** based
-on stage-file metadata and algorithm parameters. In addition, the pipeline now
+The reduction checkpoint signature is an **operational resume guard** based
+on stage-file metadata. In addition, the pipeline now
 checks SHA-256 for **every original input shapefile component** against the
 manifest embedded in `work/sources.npz`, including after a source file has been
 replaced with one of the same size and modification time. The matrix stage

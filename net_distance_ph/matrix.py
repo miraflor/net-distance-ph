@@ -2,10 +2,17 @@
 Many-to-many shortest paths: parallel, checkpointed, resumable, and ordered so
 that near-neighbour distances land first.
 
-Shape of the problem. There are ~1,600 sources and, after contraction, a core
-graph of a few tens of thousands of nodes. One Dijkstra run from a source
-settles every node within its radius, so a single run yields a whole row of the
-matrix. The unit of work is therefore one source.
+Shape of the problem. There are ~1,600 sources and a core graph produced by
+``fast_reduce``: leaves without sources are removed and degree-2 chains become
+single edges, but every junction of degree three or more stays, so the core of
+a national road network can still hold millions of nodes. One Dijkstra run
+from a source settles every node within its radius, so a single run yields a
+whole row of the matrix. The unit of work is therefore one source.
+
+All Dijkstra calls use ``directed=True``. ``build_csr`` stores both directions
+of every undirected edge, so the result is identical, while ``directed=False``
+makes scipy build a transposed copy of the whole graph on every call. That copy
+dominates the cost of the short radius-limited searches of the early waves.
 
 **Waves.** A Dijkstra call takes a distance ``limit``, and a limited run settles
 only the nodes inside it -- measured at ~2% of the cost of an unlimited run for
@@ -201,7 +208,8 @@ def _close_worker_state():
 
 def _work(task):
     batch, limit = task
-    d = dijkstra(_G, directed=False, indices=_SRC[batch], limit=limit)
+    # The CSR is symmetric (see build_csr); directed=True avoids a per-call transpose.
+    d = dijkstra(_G, directed=True, indices=_SRC[batch], limit=limit)
     return batch, d[:, _SRC], limit
 
 
@@ -305,12 +313,15 @@ def compute(
     checkpoint_every=8,
     on_wave_end=None,
     verbose=True,
+    fingerprint=None,
 ):
     """Fill the source-to-source matrix, resuming from whatever is on disk.
 
     ``waves`` is a sequence of per-source radius arrays in km, applied in
     order; an unlimited wave is always appended last. ``order`` is the sequence
-    in which sources are visited within each wave.
+    in which sources are visited within each wave. ``fingerprint`` is the
+    value of :func:`core_fingerprint` for ``work_dir`` and ``src_nodes``; pass
+    it when it is already known, to avoid reading and hashing the core again.
     """
     if batch_size < 1:
         raise ValueError("batch_size must be a positive integer")
@@ -321,7 +332,9 @@ def compute(
     work_dir = Path(work_dir)
     src_nodes = np.asarray(src_nodes, dtype=np.int64)
     S = src_nodes.size
-    ck = Checkpoint(work_dir, S, fingerprint=core_fingerprint(work_dir, src_nodes), verbose=verbose)
+    if fingerprint is None:
+        fingerprint = core_fingerprint(work_dir, src_nodes)
+    ck = Checkpoint(work_dir, S, fingerprint=fingerprint, verbose=verbose)
 
     order = np.arange(S, dtype=np.int64) if order is None else np.asarray(order, np.int64)
     schedule = [np.asarray(r, dtype=np.float64) for r in waves]

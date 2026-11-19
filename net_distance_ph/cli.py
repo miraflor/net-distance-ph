@@ -137,10 +137,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--search-km", type=float, default=10.0, help="local geometric candidate search radius (default 10 km; does NOT add edges)")
     p.add_argument("--lineage-only", action="store_true", help="check original-versus-reduced component identity without searching nearby gaps")
 
-    p = sub.add_parser("inspect-topology-osm", help="read-only OSM node-ID investigation of v50 populated component gaps")
+    p = sub.add_parser("inspect-topology-osm", help="read-only OSM node-ID investigation of the populated component gaps reported by audit-topology")
     p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
-    p.add_argument("--top", type=int, default=15, help="top v50 populated components (default 15)")
-    p.add_argument("--ranks", nargs="+", type=int, help="specific v50 priority ranks (e.g. 2 6 7 8 9)")
+    p.add_argument("--top", type=int, default=15, help="top populated components from the audit-topology report (default 15)")
+    p.add_argument("--ranks", nargs="+", type=int, help="specific audit-topology priority ranks (e.g. 2 6 7 8 9)")
     p.add_argument("--relation", choices=("main", "other", "both"), default="both",
                    help="nearest main, nearest other, or both (default both; identical endpoint pairs deduplicated)")
     p.add_argument("--radius-m", type=float, default=1000.0,
@@ -151,9 +151,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-dir", type=Path, help="existing population-weighted routing run (default latest)")
     p.add_argument("--points-file", type=Path, help="original point geometry source if no matching cached default is found")
     p.add_argument("--top", type=int, default=15, help="largest nonmain populated components to audit (default 15)")
-    p.add_argument("--ranks", nargs="+", type=int, help="specific original v50 priority ranks, e.g. 2 6 7 8 9")
+    p.add_argument("--ranks", nargs="+", type=int, help="specific audit-topology priority ranks, e.g. 2 6 7 8 9")
 
-    p = sub.add_parser("audit-polygon-network", help="v53 read-only six-barangay polygon/road network GIS consistency")
+    p = sub.add_parser("audit-polygon-network", help="read-only polygon/road network GIS consistency check for six barangays found by audit-origin-snap")
     p.add_argument("--workspace", type=Path, help="existing workspace (default ~/Documents/net-distance-ph)")
     p.add_argument("--run-dir", type=Path, help="existing population-weighted routing run (default latest)")
 
@@ -391,8 +391,9 @@ def main(argv: list[str] | None = None) -> int:
         from .topology_diagnostics import execute as topology_diagnostics
         from .workspace import run_log
         try:
-            if not 1 <= args.top_components <= 229:
-                raise ValueError("--top-components must be between 1 and 229")
+            # No upper limit: the audit uses at most the components that exist.
+            if args.top_components < 1:
+                raise ValueError("--top-components must be a positive integer")
             if not 0 < args.search_km <= 1000:
                 raise ValueError("--search-km must be in (0, 1000]")
             with run_log(workspace_path(args.workspace)):

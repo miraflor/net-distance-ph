@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""Show the latest stage-2 heartbeat and checkpoint state."""
+"""Show the state of stage 2 (graph reduction) in a work folder.
+
+Stage 2 uses the fast reducer (leaf pruning and degree-2 chain compression).
+It writes one checkpoint before the reduction starts: the de-duplicated graph
+with components that contain no town removed. It prints progress only between
+steps, so a quiet log does not mean that the process stopped.
+"""
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import time
 
 import numpy as np
 
-import config as C
+from net_distance_ph.workspace import paths, workspace_path
 
 
 def age_text(seconds: float) -> str:
@@ -20,12 +27,20 @@ def age_text(seconds: float) -> str:
     return f"{seconds / 3600:.1f} hours"
 
 
+def default_work() -> Path:
+    """The work folder that ``run.py`` and ``net-distance-ph`` use by default."""
+    explicit = os.environ.get("NET_DISTANCE_PH_WORK")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    return paths(workspace_path())["work"]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work", type=Path, default=None,
-                        help="intermediate directory used by run.py (or set NET_DISTANCE_PH_WORK)")
+                        help="work folder (default: NET_DISTANCE_PH_WORK, else <workspace>/work)")
     args = parser.parse_args()
-    work = (args.work.expanduser().resolve() if args.work is not None else Path(C.WORK))
+    work = args.work.expanduser().resolve() if args.work is not None else default_work()
     log = work / "reduce_progress.log"
     checkpoint = work / "reduce_checkpoint.npz"
     core_sources = work / "core_sources.npz"
@@ -38,18 +53,12 @@ def main() -> None:
         print(f"Completed file: {core_sources}")
     elif checkpoint.exists():
         age = time.time() - checkpoint.stat().st_mtime
-        print("STATUS: An unfinished but resumable stage-2 checkpoint exists.")
+        print("STATUS: A stage-2 checkpoint exists (stage 2 is running or was interrupted).")
         print(f"Checkpoint last written {age_text(age)} ago.")
         try:
             with np.load(checkpoint, allow_pickle=False) as cp:
-                alive = cp["alive"]
-                n_nodes = int(cp["n_nodes"])
-                live = int(alive.sum()) if alive.size else n_nodes
-                print(f"Live nodes at checkpoint: {live:,}")
-                print(f"Edges at checkpoint: {cp['u'].size:,}")
-                print(f"Completed contraction passes: {int(cp['completed_passes']):,}")
-                print(f"Next phase index: {int(cp['next_phase'])}")
-                print(f"Completed passes in current phase: {int(cp['next_pass'])}")
+                print(f"Nodes in checkpoint graph: {int(cp['n_nodes']):,}")
+                print(f"Edges in checkpoint graph: {cp['u'].size:,}")
         except Exception as exc:
             print(f"Could not read checkpoint details: {exc}")
     else:
@@ -59,14 +68,8 @@ def main() -> None:
         age = time.time() - log.stat().st_mtime
         print()
         print(f"Progress log last changed {age_text(age)} ago.")
-        likely_window = max(float(C.REDUCE_HEARTBEAT_SECONDS) * 2.5, 75.0)
-        if age <= likely_window:
-            print("A recent heartbeat exists, so Step 2 is likely running or just checkpointing.")
-        else:
-            print(
-                "No recent heartbeat. The process may be sleeping, stopped, or between "
-                "heartbeat-covered operations. The checkpoint remains resumable."
-            )
+        print("The fast reducer logs only between steps; check the process list to see "
+              "whether stage 2 is still running.")
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
         print("\nLast 12 log lines:")
         for line in lines[-12:]:

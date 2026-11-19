@@ -1,4 +1,5 @@
-"""Read-only OSM node-ID inspection of v50 population-network gap candidates.
+"""Read-only OSM node-ID inspection of population-network gap candidates
+reported by ``audit-topology`` (schema v50).
 
 Reuses the established local OSM gap inspector. No new edges, model parameter
 changes, downloads, routing jobs, or modifications to existing outputs.
@@ -29,13 +30,17 @@ def select_gap_candidates(priorities: list[dict], candidates: list[dict],
     Only rows from the *already reported* v50 geometric gap search are used.
     This function performs no approximation, graph edits, or PBF access.
     """
-    if not isinstance(top, int) or not 1 <= top <= 229:
-        raise ValueError("--top must be an integer in [1, 229]")
+    # Ranks are checked against the audit-topology report below; there is no
+    # fixed upper limit.
+    if not isinstance(top, int) or top < 1:
+        raise ValueError("--top must be a positive integer")
     if relation not in {"main", "other", "both"}:
         raise ValueError("--relation must be main, other, or both")
-    allowed = set(ranks) if ranks else set(range(1, top + 1))
-    if any(type(x) is not int or x < 1 or x > 229 for x in allowed):
-        raise ValueError("--ranks must contain ranks in [1, 229]")
+    # Ranks above the largest reported rank cannot match, so bound the set by it.
+    highest = max((int(p["rank"]) for p in priorities), default=0)
+    allowed = set(ranks) if ranks else set(range(1, min(top, highest) + 1))
+    if any(type(x) is not int or x < 1 for x in allowed):
+        raise ValueError("--ranks must contain positive integer ranks")
     priorities_by_rank = {}
     for p in priorities:
         rank = int(p["rank"])

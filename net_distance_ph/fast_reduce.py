@@ -21,8 +21,8 @@ try:
     from numba import njit
 except ImportError as exc:
     raise ImportError(
-        "Fast reduction requires Numba. Install it in the active environment: "
-        "python -m pip install 'numba>=0.59'"
+        "Fast reduction requires Numba, a required dependency of net-distance-ph. "
+        "Reinstall the package or run: python -m pip install 'numba>=0.59'"
     ) from exc
 
 
@@ -141,7 +141,8 @@ def reduce_fast(
     Inputs must be a de-duplicated, loop-free, undirected edge list; the stage-2
     driver already enforces this. Existing legacy reduction checkpoints are
     valid inputs, because they have already replaced removed nodes with exact
-    shortcuts. A checkpoint's ``alive`` mask is honored for all retained nodes.
+    shortcuts. A checkpoint's ``alive`` mask is only validated (every source
+    and edge endpoint must be alive); the retained set is derived again here.
 
     Returns (u, v, w, alive), compatible with ``reduce.compact``.
     """
@@ -185,8 +186,10 @@ def reduce_fast(
          f"{u.size - int(active_edge.sum()):,} edges in {time.monotonic() - t1:.1f}s")
 
     kept = protected | ((degree > 0) & (degree != 2))
-    # A degree-2-only connected component without terminals can be discarded;
-    # drop_unreachable already removed all such components before this step.
+    # A connected component without terminals that is only a cycle of degree-2
+    # nodes is never walked and therefore dropped. A terminal-free component
+    # that contains a junction (degree >= 3) is kept; callers remove such
+    # components first with matrix.drop_unreachable.
     t2 = time.monotonic()
     ru, rv, rw = _walk_chains(u, v, w, ptr, adj, degree, active_edge, kept)
     emit(f"  chain compression: {ru.size:,} candidate shortcuts in {time.monotonic() - t2:.1f}s")

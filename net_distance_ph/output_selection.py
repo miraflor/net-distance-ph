@@ -15,7 +15,7 @@ _DATED_DIR = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{3})?$")
 
 
 def valid_output_run_name(name: str, routing_hash: str) -> bool:
-    """Accept both v56 content-hash folders and v57 timestamp folders."""
+    """Accept both output-folder formats: older content-hash names and timestamp names."""
     return name == routing_hash[:16] or bool(_DATED_DIR.fullmatch(name))
 
 

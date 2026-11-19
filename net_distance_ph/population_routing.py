@@ -10,6 +10,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+from datetime import datetime
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import time
@@ -28,14 +30,120 @@ from .province_equivalent import build_province_equivalents
 from .output_selection import previous_geometry, output_manifest, print_output_locations, create_timestamped_run_directory
 
 
-# Population-weighted logging instrumentation (v44)
+# Logging instrumentation
 from contextvars import ContextVar as _PwContextVar
 from functools import wraps as _pw_wraps
 from .workspace import timed_step as _pw_timed_step
-# Unified routing progress instrumentation (v47)
+# Routing progress instrumentation
 from .workspace import progress_event as _pw_progress
 
 _PW_HEARTBEAT_SECONDS = _PwContextVar("pw_heartbeat_seconds", default=30.0)
+
+# Identifies how points_core numbers the core's nodes. Cores written before
+# this field existed (no "core_builder" in metadata.json) used LEGACY: no
+# component filtering before reduce_fast. Distances are identical for both;
+# node numbers are not, so cached town sites are tied to the builder.
+LEGACY_CORE_BUILDER = "reduce_fast/v1"
+CORE_BUILDER = "drop_unreachable+reduce_fast/v2"
+
+
+def _core_builder(core_dir):
+    meta = Path(core_dir) / "metadata.json"
+    if not meta.is_file():
+        return LEGACY_CORE_BUILDER
+    return json.loads(meta.read_text(encoding="utf-8")).get("core_builder", LEGACY_CORE_BUILDER)
+
+
+# A single workspace-scoped advisory lock avoids a race between two builds
+# that would otherwise both quarantine/publish the same core. OS locks release
+# on process death; no manually cleared stale lock directory is created.
+@contextmanager
+def _population_core_lock(core_root):
+    core_root = Path(core_root)
+    core_root.mkdir(parents=True, exist_ok=True)
+    with (core_root / ".build.lock").open("a+b") as lock_file:
+        if os.name == "nt":
+            import msvcrt
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write(b"0")
+                lock_file.flush()
+            lock_file.seek(0)
+            try:
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                raise RuntimeError("Another barangay-core operation holds the workspace lock") from exc
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                raise RuntimeError("Another barangay-core operation holds the workspace lock") from exc
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def _population_cache_lock(home, purpose):
+    """Serialize shared writes for a cache stage; locks release after a crash.
+
+    Use a distinct lock per stage, and a run-wide lock for normal CLI runs.
+    Direct API callers are protected at the site and routing stages as well.
+    """
+    try:
+        with _population_core_lock(Path(home) / ".locks" / purpose):
+            yield
+    except RuntimeError as exc:
+        if str(exc) == "Another barangay-core operation holds the workspace lock":
+            raise RuntimeError(
+                f"Another population-weighted {purpose} operation holds the workspace lock"
+            ) from exc
+        raise
+
+
+# V2 digests covered the numerical CSR and the demand-to-core node map.
+# V3 additionally covers all files used by site selection and verification.
+# Keep the old file list only to validate (not blindly trust) prior metadata.
+_PREVIOUS_CORE_IDENTITY_FILES = (
+    "core_data.npy", "core_indices.npy", "core_indptr.npy", "core_shape.npy",
+    "core_index_per_bar.npy",
+)
+_CORE_IDENTITY_FILES = _PREVIOUS_CORE_IDENTITY_FILES + (
+    "original_index_per_bar.npy", "offset_per_bar.npy",
+    "snapped_node_lonlat.npy", "valid_barangay_mask.npy",
+)
+_CORE_SHA256_VERSION = 3
+
+
+def _core_content_sha256(core_dir, *, files=None):
+    digest = hashlib.sha256()
+    for name in (_CORE_IDENTITY_FILES if files is None else files):
+        digest.update(name.encode("utf-8") + b"\0")
+        with (Path(core_dir) / name).open("rb") as stream:
+            for part in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(part)
+    return digest.hexdigest()
+
+
+def _verified_core_sha256(core_dir):
+    """Verify the complete core identity before using v3 cache entries."""
+    if _core_builder(core_dir) == LEGACY_CORE_BUILDER:
+        return None  # Preserve the established legacy cache identity.
+    meta = json.loads((Path(core_dir) / "metadata.json").read_text(encoding="utf-8"))
+    if meta.get("core_sha256_version") != _CORE_SHA256_VERSION:
+        raise ValueError("Older barangay core digest: call points_core to migrate it before routing")
+    recorded = meta.get("core_sha256")
+    actual = _core_content_sha256(core_dir)
+    if not recorded or actual != recorded:
+        raise ValueError(f"Barangay core content differs from its metadata: {core_dir}")
+    return actual
 
 
 def _pw_time_call(label, function, *args, **kwargs):
@@ -176,14 +284,51 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
     required=["core_data.npy","core_indices.npy","core_indptr.npy","core_shape.npy",
               "core_index_per_bar.npy","original_index_per_bar.npy","offset_per_bar.npy",
               "snapped_node_lonlat.npy","valid_barangay_mask.npy","snap_audit.csv"]
+    old=None
     if meta.is_file():
-        old=json.loads(meta.read_text(encoding="utf-8"))
-        if old.get("cache_key")==key and all((core_dir/f).is_file() for f in required):
-            print("REUSE: exact barangay-terminal-preserving core")
-            return core_dir,key
+        try:
+            old=json.loads(meta.read_text(encoding="utf-8"))
+        except ValueError:
+            old=None
+    if old is not None and old.get("cache_key")==key and all((core_dir/f).is_file() for f in required):
+        if old.get("core_builder") == CORE_BUILDER:
+            recorded = old.get("core_sha256")
+            version = old.get("core_sha256_version", 2)
+            if recorded:
+                if version == 2:
+                    # Verify the old five-file v2 digest before migration.
+                    previous = _core_content_sha256(core_dir, files=_PREVIOUS_CORE_IDENTITY_FILES)
+                    if recorded != previous:
+                        raise ValueError(f"Existing v2 core digest mismatch: {core_dir}")
+                elif version == _CORE_SHA256_VERSION:
+                    if recorded != _core_content_sha256(core_dir):
+                        raise ValueError(f"Barangay core content differs from its metadata: {core_dir}")
+                else:
+                    raise ValueError(f"Unsupported core digest version {version!r}: {core_dir}")
+            if version != _CORE_SHA256_VERSION or not recorded:
+                # Earlier un-hashed v2 cores get a digest of their current bytes;
+                # their old site caches lack this identity and are recomputed.
+                old["core_sha256"] = _core_content_sha256(core_dir)
+                old["core_sha256_version"] = _CORE_SHA256_VERSION
+                write_json(meta, old)
+                print("UPGRADED: core metadata now records the complete v3 digest", flush=True)
+        print("REUSE: exact barangay-terminal-preserving core")
+        return core_dir,key
+    if old is not None and old.get("cache_key") not in (None,key):
+        raise RuntimeError(f"The barangay core at {core_dir} was built from different inputs "
+                           "(cache-key prefix collision). Refusing to overwrite it; move it aside manually.")
+    stamp=datetime.now().strftime("%Y%m%d-%H%M%S")
     if core_dir.exists():
-        raise RuntimeError(f"A different or incomplete barangay core exists at {core_dir}. Refusing to overwrite. Move it aside manually to rebuild; existing town core remains intact.")
-    core_dir.mkdir(parents=True,exist_ok=False)
+        # The folder name is a hash of every input, so a folder without valid
+        # metadata or files is an unfinished build of these same inputs. Keep
+        # it for inspection under another name and build again.
+        aside=core_dir.with_name(f"{core_dir.name}.incomplete-{stamp}")
+        os.rename(core_dir,aside)
+        print(f"MOVED ASIDE: incomplete barangay core {core_dir} -> {aside}",flush=True)
+    # Build in a separate folder and rename it only when complete, so an
+    # interrupted build never leaves a folder that blocks the next run.
+    partial=core_dir.with_name(f".{core_dir.name}.partial-{stamp}-{os.getpid()}")
+    partial.mkdir(parents=True,exist_ok=False)
     positions=np.asarray(params["positions"],dtype=np.float64)
     try:
         with np.load(national_graph,allow_pickle=False) as g:
@@ -191,6 +336,8 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
             n_nodes=len(ll)
             # Match the national project road/ferry preference. Exclude
             # unreasonably distant locations rather than invent connections.
+            # Fixed rule: this pipeline does not read SNAP_FALLBACK_TERMINALS_ONLY
+            # from config.py, and changing it here would need a cache-key field.
             idx,off,tier=gb.snap_sources(positions,ll,g["flags"],
                     max_snap_km=params["max_snap_km"],prefer_road=True,
                     fallback_terminals_only=False,verbose=True)
@@ -211,20 +358,25 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
             del ll
             print("De-duplicating original graph edges...")
             u,v,w=rd.dedupe_edges(g["u"],g["v"],g["w"],n_nodes)
+        # reduce_fast removes leaves and degree-2 chains but keeps junctions,
+        # so components without any origin would otherwise stay in the core.
+        print("Dropping graph components that contain no valid barangay origin...")
+        u,v,w,n_kept,kept_idx=mx.drop_unreachable(u,v,w,n_nodes,idx[good])
         from .fast_reduce import reduce_fast
-        print(f"Exact fast reduction protecting {np.unique(idx[good]).size:,} valid barangay terminals...")
-        u,v,w,alive=reduce_fast(u,v,w,n_nodes,np.unique(idx[good]),progress=print)
-        cu,cv,cw,cn,valid_core_sources=rd.compact(u,v,w,alive,idx[good])
+        terminals=np.unique(kept_idx)
+        print(f"Exact fast reduction protecting {terminals.size:,} valid barangay terminals...")
+        u,v,w,alive=reduce_fast(u,v,w,n_kept,terminals,progress=print)
+        cu,cv,cw,cn,valid_core_sources=rd.compact(u,v,w,alive,kept_idx)
         del u,v,w,alive
         G=mx.build_csr(cu,cv,cw,cn)
-        mx.save_core(G,core_dir)
+        mx.save_core(G,partial)
         csrc=np.full(idx.shape,-1,dtype=np.int32)
         csrc[good]=valid_core_sources.astype(np.int32)
-        np.save(core_dir/"core_index_per_bar.npy",csrc)
-        np.save(core_dir/"original_index_per_bar.npy",idx.astype(np.int32))
-        np.save(core_dir/"offset_per_bar.npy",off)
-        np.save(core_dir/"snapped_node_lonlat.npy",snapped_ll)
-        np.save(core_dir/"valid_barangay_mask.npy",good.astype(np.bool_))
+        np.save(partial/"core_index_per_bar.npy",csrc)
+        np.save(partial/"original_index_per_bar.npy",idx.astype(np.int32))
+        np.save(partial/"offset_per_bar.npy",off)
+        np.save(partial/"snapped_node_lonlat.npy",snapped_ll)
+        np.save(partial/"valid_barangay_mask.npy",good.astype(np.bool_))
         audit_rows=[{"psgc_code":prepared[i]["psgc_code"],
                      "barangay_name":prepared[i].get("barangay_name",""),
                      "town_psgc":prepared[i]["town_psgc"],
@@ -233,26 +385,44 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
                      "reason":f"no modeled road/ferry node within {params['max_snap_km']} km"}
                     for i in bad]
         from .population_data import _write_csv
-        _write_csv(core_dir/"snap_audit.csv",
+        _write_csv(partial/"snap_audit.csv",
                    ("psgc_code","barangay_name","town_psgc","population","lon","lat","reason"),audit_rows)
-        write_json(meta,{**keydata,"cache_key":key,"n_core_vertices":cn,"n_core_edges":len(cu),
+        write_json(partial/"metadata.json",{**keydata,"cache_key":key,"core_builder":CORE_BUILDER,
+              "core_sha256":_core_content_sha256(partial),
+              "core_sha256_version":_CORE_SHA256_VERSION,
+              "n_core_vertices":cn,"n_core_edges":len(cu),
               "n_barangays":len(prepared),"n_unmodeled_barangays":len(bad),
               "unmodeled_population":sum(int(prepared[i]["population"]) for i in bad),
               "n_unique_terminals":len(np.unique(valid_core_sources))})
+        os.rename(partial,core_dir)
         print(f"BARANGAY CORE READY: {cn:,} nodes / {len(cu):,} edges")
         return core_dir,key
     except BaseException:
-        # Preserve failed artifacts for forensic inspection, but never publish
-        # metadata that would make a partial core resumable.
-        meta.unlink(missing_ok=True)
+        # Keep the unfinished folder for inspection. It is not at core_dir,
+        # so it does not stop the next run from building again.
+        if partial.is_dir() and not any(partial.iterdir()):
+            partial.rmdir()
+        else:
+            print(f"Barangay core build stopped; partial files kept at {partial}",flush=True)
         raise
+
+
+# Keep the implementation unchanged and serialize its critical section.
+_points_core_unlocked = points_core
+
+
+def points_core(workspace, home, prepared, pop_meta, points_path, params):
+    with _population_core_lock(Path(home) / "cores"):
+        return _points_core_unlocked(workspace, home, prepared, pop_meta, points_path, params)
 
 
 @_pw_timed_phase("adaptive k-medians selection")
 def build_town_sites(home, core_dir, key, rows, roster, params):
     """Town-sized exact local network D matrices; checkpoint selected sites per town."""
-    selection_started = time.monotonic()  # v48 progress clock
+    selection_started = time.monotonic()  # progress clock
+    core_sha256=_verified_core_sha256(core_dir)
     G=mx.load_core(core_dir,mmap=True)
+    core_builder=_core_builder(core_dir)
     ncomp,label=connected_components(G,directed=False)
     # Population is precisely the published 2024 barangay weight.
     core_idx=np.load(core_dir/"core_index_per_bar.npy")
@@ -271,6 +441,12 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
     all_sites=[]
     audit=[]
     selection_mode=params["selection"].get("mode", "one")
+    max_sites=params["selection"]["max_sites_per_town"]
+
+    def reached_cap(n_sites, n_demand):
+        # This flags contact with the cap, NOT proof that it is binding.
+        # A larger-cap sensitivity run is needed to determine bindingness.
+        return int(n_sites>=max_sites and n_demand>n_sites)
     for ni,town in enumerate(codes,1):
         ids=bytown.get(town,[])
         if not ids:
@@ -282,11 +458,20 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
                 audit.append({"town_psgc":town,"town_name":roster[town]["name"],
                               "mode":selection_mode,"n_demand_nodes":0,
                               "n_components":0,"n_sites":0,"mean_access_km":"",
-                              "selection_score":"","component_site_counts":"{}"})
+                              "selection_score":"","component_site_counts":"{}",
+                              "reached_site_cap":""})
             continue
         cache=cache_dir/(town+".json")
-        if cache.is_file():
-            obj=json.loads(cache.read_text(encoding="utf-8"))
+        obj=json.loads(cache.read_text(encoding="utf-8")) if cache.is_file() else None
+        if obj is not None and obj.get("core_builder",LEGACY_CORE_BUILDER)!=core_builder:
+            # Different construction methods may assign different node numbers.
+            print(f"STALE TOWN SITE CACHE (core builder changed): recomputing {town}",flush=True)
+            obj=None
+        if obj is not None and core_sha256 is not None and obj.get("core_sha256")!=core_sha256:
+            # No grandfathering for v2 cache entries lacking a core digest.
+            print(f"STALE TOWN SITE CACHE (core content unverified): recomputing {town}",flush=True)
+            obj=None
+        if obj is not None:
             if obj.get("schema")!=SCHEMA or obj.get("settings")!=params["selection"]:
                 raise ValueError(f"Town site cache has mismatched settings: {cache}")
             all_sites.extend(obj["sites"])
@@ -299,7 +484,8 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
                               "n_components":diagnostic["n_components"],"n_sites":len(obj["sites"]),
                               "mean_access_km":obj["mean_access_km"],
                               "selection_score":diagnostic.get("selection_score", ""),
-                              "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True)})
+                              "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True),
+                              "reached_site_cap":reached_cap(len(obj["sites"]),obj["n_demand_nodes"])})
             continue
         # Multiple barangay representatives may snap to one road vertex.
         # Aggregate their populations, *without* discarding their snap offsets.
@@ -351,8 +537,10 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
                           "lon":d["lon"],"lat":d["lat"],
                           "population":int(weights[j]),"mean_access_km":float(access[j]),
                           "component":int(comps[ix])})
-        assert sum(x["population"] for x in sites)==int(pops.sum())
-        write_json(cache,{"schema":SCHEMA,"settings":params["selection"],
+        if sum(x["population"] for x in sites)!=int(pops.sum()):
+            raise ValueError(f"Town {town}: representative populations do not sum to the town population")
+        write_json(cache,{"schema":SCHEMA,"settings":params["selection"],"core_builder":core_builder,
+                          "core_sha256":core_sha256,
                           "population":int(pops.sum()),"mean_access_km":overall,
                           "n_demand_nodes":len(nodes),"selection_diagnostics":diagnostic,
                           "sites":sites})
@@ -363,17 +551,32 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
                           "n_components":diagnostic["n_components"],"n_sites":len(sites),
                           "mean_access_km":overall,
                           "selection_score":diagnostic.get("selection_score", ""),
-                          "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True)})
+                          "component_site_counts":json.dumps(diagnostic["component_site_counts_by_graph_component"],sort_keys=True),
+                          "reached_site_cap":reached_cap(len(sites),len(nodes))})
         if ni%100==0 or ni==len(codes):
             _pw_progress("adaptive k-medians selection", ni, len(codes), selection_started, unit="towns")
     if "median_selection" in params["selection"]:
         from .population_data import _write_csv
         _write_csv(cache_dir/"selection_audit.csv",
                    ("town_psgc","town_name","mode","n_demand_nodes","n_components",
-                    "n_sites","mean_access_km","selection_score","component_site_counts"),audit)
+                    "n_sites","mean_access_km","selection_score","component_site_counts",
+                    "reached_site_cap"),audit)
+        n_capped=sum(1 for row in audit if row["reached_site_cap"]==1)
         print(f"MEDIAN SELECTION: {selection_mode}; {len(all_sites):,} sites; "
+              f"{n_capped:,} towns reached --max-sites-per-town={max_sites}; "
               f"audit {cache_dir/'selection_audit.csv'}",flush=True)
     return all_sites
+
+
+# Protect the full per-town checkpoint read/modify/write sequence for direct
+# API callers as well as ordinary CLI runs. Other selection settings can be
+# serialized conservatively without changing numerical results.
+_build_town_sites_unlocked = build_town_sites
+
+
+def build_town_sites(home, core_dir, key, rows, roster, params):
+    with _population_cache_lock(home, "sites"):
+        return _build_town_sites_unlocked(home, core_dir, key, rows, roster, params)
 
 
 _ROUTE_G=None
@@ -391,9 +594,21 @@ def _routing_init(core_dir, nodes, population, town_indices, n_towns):
     _ROUTE_NUM_TOWN=int(n_towns)
 
 
+def _routing_close():
+    """Drop the routing core held by this process.
+
+    The CSR arrays are views of memory-mapped .npy files. While any of them is
+    referenced, Windows refuses to rewrite or delete those files; dropping the
+    last reference unmaps them. Pool worker processes release theirs on exit.
+    """
+    global _ROUTE_G,_ROUTE_NODES,_ROUTE_POP,_ROUTE_TOWN,_ROUTE_NUM_TOWN
+    _ROUTE_G=_ROUTE_NODES=_ROUTE_POP=_ROUTE_TOWN=_ROUTE_NUM_TOWN=None
+
+
 def _routing_task(item):
     i,src=item
-    d=dijkstra(_ROUTE_G,directed=False,indices=int(src))[_ROUTE_NODES]
+    # The CSR stores both edge directions; directed=True avoids a per-call transpose.
+    d=dijkstra(_ROUTE_G,directed=True,indices=int(src))[_ROUTE_NODES]
     ok=np.isfinite(d)
     numer=np.bincount(_ROUTE_TOWN[ok], weights=_ROUTE_POP[ok]*d[ok],minlength=_ROUTE_NUM_TOWN)
     reach=np.bincount(_ROUTE_TOWN[ok], weights=_ROUTE_POP[ok],minlength=_ROUTE_NUM_TOWN)
@@ -411,7 +626,11 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
     site_pop=np.array([s["population"] for s in sites],dtype=np.float64)
     site_town=np.array([ti[s["town_psgc"]] for s in sites],dtype=np.int32)
     unique_nodes=np.unique(site_nodes)
-    route_hash=hashlib.sha256((key+json.dumps(sites,sort_keys=True)).encode()).hexdigest()
+    # v2 route caches must identify the actual weighted core and node map.
+    # Legacy cores retain their historical route key to avoid forced rerouting.
+    core_identity=_verified_core_sha256(core_dir)
+    route_key=key + (f":core={core_identity}" if core_identity else "")
+    route_hash=hashlib.sha256((route_key+json.dumps(sites,sort_keys=True)).encode()).hexdigest()
     route_dir=home/"routing"/route_hash
     route_dir.mkdir(parents=True,exist_ok=True)
     header=route_dir/"meta.json"
@@ -472,6 +691,10 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
             # Only the durably flushed completion mask is authority; on a
             # crash/restart, unfinished rows are recomputed and overwritten.
             raise
+        finally:
+            if workers==1:
+                # Single-process routing loaded the core into this process.
+                _routing_close()
     if not np.all(done):raise RuntimeError("OD routing incomplete")
     if not np.isfinite(numer).all() or not np.isfinite(reach).all():
         raise ValueError("Completed routing contains nonfinite row totals")
@@ -483,6 +706,18 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
         A[site_town[s]]+=site_pop[s]*numer[idx]
         B[site_town[s]]+=site_pop[s]*reach[idx]
     return towns,A,B,route_hash
+
+
+# The numerical routing checkpoint uses shared memmaps and fixed temporary
+# completion-mask filenames. Hold this lock until all source rows are written
+# and durably checkpointed; not just during route-directory creation.
+_compute_routing_unlocked = compute_routing
+
+
+def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
+    with _population_cache_lock(home, "routing"):
+        return _compute_routing_unlocked(home, core_dir, sites, key,
+                                         workers=workers, all_towns=all_towns)
 
 
 @_pw_timed_phase(lambda *a, **kw: f"matrix export: {a[1] if len(a) > 1 else kw.get('level', 'unknown')}")
@@ -597,8 +832,9 @@ def verify_original_graph(workspace, core_dir, sites, n_checked):
     core=mx.load_core(core_dir,mmap=True)
     n_mismatched=0;max_error=0.0
     for i in picks:
-        ref=dijkstra(original,directed=False,indices=int(original_nodes[i]))[original_nodes]
-        got=dijkstra(core,directed=False,indices=int(core_nodes[i]))[core_nodes]
+        # Both CSRs store both edge directions (build_csr); directed=True is exact.
+        ref=dijkstra(original,directed=True,indices=int(original_nodes[i]))[original_nodes]
+        got=dijkstra(core,directed=True,indices=int(core_nodes[i]))[core_nodes]
         n_mismatched+=int(np.count_nonzero(np.isfinite(ref)!=np.isfinite(got)))
         both=np.isfinite(ref)&np.isfinite(got)
         if both.any():max_error=max(max_error,float(np.max(np.abs(ref[both]-got[both]))))
@@ -696,14 +932,15 @@ def run(args):
     pop_meta={**pop_meta,"missing_geometry_audit_csv":str(geometry_audit),
               "missing_geometry_barangays":len(missing_geometry),
               "missing_geometry_population":missing_pop}
-    if args.max_mean_access_km is not None and getattr(args,"median_selection","balanced")=="one":
+    # Same default as the CLI (--median-selection balanced).
+    median_selection=getattr(args,"median_selection","balanced")
+    if args.max_mean_access_km is not None and median_selection=="one":
         raise ValueError("--median-selection one conflicts with --max-mean-access-km; "
                          "omit one to use budgeted k-median selection")
-    selection_mode=("budget" if args.max_mean_access_km is not None
-                    else getattr(args,"median_selection","one"))
+    selection_mode=("budget" if args.max_mean_access_km is not None else median_selection)
     selection={"max_mean_access_km":args.max_mean_access_km,
                "max_sites_per_town":args.max_sites_per_town,
-               "median_selection":getattr(args,"median_selection","one"),
+               "median_selection":median_selection,
                "mode":selection_mode}
     if args.max_snap_km<=0 or not np.isfinite(args.max_snap_km):
         raise ValueError("--max-snap-km must be finite positive")
@@ -714,6 +951,9 @@ def run(args):
     if len(sites)>16000:
         raise ValueError(f"{len(sites)} representatives would be expensive; reduce --max-sites-per-town, raise access tolerance, or explicitly review capacity")
     all_towns=sorted(c for c,r in roster.items() if r["level"] in ("city","municipality"))
+    # Verify the core against the original graph BEFORE the long routing step;
+    # it needs only the core and the selected sites.
+    check=verify_original_graph(workspace,core_dir,sites,args.verify_sites)
     towns,town_num,town_den,route_hash=compute_routing(home,core_dir,sites,key,
          workers=getattr(args,"workers",2),all_towns=all_towns)
     output_run=create_timestamped_run_directory(home/"output")
@@ -748,7 +988,6 @@ def run(args):
     reg_map=np.array([rm.get(roster[t]["region_psgc"],-1) for t in towns],dtype=int)
     if (reg_map<0).any():
         raise ValueError(f"Town-to-region mapping incomplete: {[towns[i] for i in np.flatnonzero(reg_map<0)][:10]}")
-    check=verify_original_graph(workspace,core_dir,sites,args.verify_sites)
     write_json(output_run/"independent_original_graph_verification.json",check)
     # The default exports all three levels; every upper tier aggregates the
     # SAME town numerator/denominator, never a separate routing run.
@@ -787,3 +1026,15 @@ def run(args):
     print_output_locations(locations, latest_file)
     print("COMPLETE: baseline centroid matrix, selected graph releases and original raw datasets unchanged", flush=True)
     return 0
+
+
+# The CLI is intentionally single-run per workspace. Stage-specific locks
+# above independently protect direct library use and resumed checkpoints.
+_run_unlocked = run
+
+
+def run(args):
+    workspace = Path(args.workspace).expanduser().resolve()
+    home = workspace / "variants" / "population_weighted"
+    with _population_cache_lock(home, "run"):
+        return _run_unlocked(args)

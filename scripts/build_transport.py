@@ -19,7 +19,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-import time  # v48 throughput clock
+import time  # throughput clock
 from urllib.parse import urlparse
 import uuid
 import xml.etree.ElementTree as ET
@@ -243,7 +243,7 @@ def _extract(source: Path, stage: Path, classes: set[str], allow_no_ferries=Fals
     ferry = stage / canonical_name("ferries")
     counts = Counter()
     rejected = Counter()
-    extract_started = time.monotonic()  # v48 throughput
+    extract_started = time.monotonic()  # throughput clock
     with shapefile.Writer(str(road), shapeType=shapefile.POLYLINE, encoding="utf-8") as roads, \
             shapefile.Writer(str(ferry), shapeType=shapefile.POLYLINE, encoding="utf-8") as ferries:
         for writer in (roads, ferries):

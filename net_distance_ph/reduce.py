@@ -6,10 +6,13 @@ Removing a non-source node and replacing paths through it with exact shortcut
 edges preserves every source-to-source shortest-path distance while making the
 later Dijkstra runs much faster.
 
-This version also exposes detailed per-pass progress and resumable checkpoints
-through a callback supplied by ``run.py``. A checkpoint is written only after a
-complete contraction pass, so an interruption can at worst repeat the current
-pass; it never resumes from a half-mutated graph.
+Pipeline status: stage 2 (``run.py reduce``) and the population-weighted
+core use ``net_distance_ph.fast_reduce.reduce_fast``. This module still
+provides ``dedupe_edges`` and ``compact``, which both paths use, and
+``reduce_to_core``, the older degree-k contraction. ``reduce_to_core`` is no
+longer called by any pipeline stage; it is kept as an independent exact
+reference implementation for the tests. Its per-pass progress and checkpoint
+callbacks are only used when a caller supplies them.
 """
 
 from __future__ import annotations
