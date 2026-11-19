@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-19 â€” Population routing v3 hardening and maintenance
+## 2026-11-19 — Population routing v3 hardening and maintenance
 
 - The review patch preserves the default distance model while improving exact
   core preprocessing, single-source verification memory use, symmetric-CSR
@@ -27,6 +27,8 @@
   rather than relabeling `RuntimeError` exceptions raised *inside* a run.
   Four stage-lock wrappers use metadata-preserving decorators. No algorithm,
   graph default, cache format, or distance result changes in this follow-up.
+
+## Earlier changes — boundary repair and CLI source preparation
 
 - fix(boundaries): audit and conservatively repair invalid upstream geometries; reject material changes.
 
