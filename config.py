@@ -46,6 +46,15 @@ GEODESIC_BACKEND = "auto"
 # large invents links across narrow straits that have no actual service.
 FERRY_CONNECT_KM = 5.0
 
+# Which ferry nodes count as terminals (gangway candidates). "part_endpoint"
+# is the historical rule: every first/last vertex of a ferry polyline part.
+# "ferry_degree_1" also requires that the node touches exactly one ferry
+# segment, so the point where two OSM ways of one crossing meet is no longer a
+# terminal; a port where exactly two ferry lines end is then also excluded.
+# See net_distance_ph.graphbuild.FERRY_TERMINAL_RULES. Changing this changes
+# the stage-1 graph; later stages detect the change and ask for a rebuild.
+FERRY_TERMINAL_RULE = "part_endpoint"
+
 # Leave these alone for a plain distance matrix. Raise them to turn the output
 # into a generalised cost that prices in the slowness and waiting time of a
 # sea crossing (e.g. multiplier 3.0 and penalty 25 km for a RORO hop).
@@ -69,22 +78,13 @@ SNAP_FALLBACK_TERMINALS_ONLY = False
 # --------------------------------------------------------------------------
 # Reduction
 # --------------------------------------------------------------------------
-# Degree cap for node contraction. 1 and 2 always shrink the graph, 3 is
-# neutral, 4+ trades edges for nodes. 4 is a good default for road networks;
-# raise to 5-6 if you have RAM to spare and want a smaller core.
-MAX_CONTRACT_DEGREE = 4
-MAX_EDGE_GROWTH = 1.05
+# Stage 2 uses net_distance_ph.fast_reduce (leaf pruning and degree-2 chain
+# compression), which has no tuning parameters. The settings of the older
+# degree-k contraction (MAX_CONTRACT_DEGREE, MAX_EDGE_GROWTH,
+# REDUCE_HEARTBEAT_SECONDS, REDUCE_CHECKPOINT_EVERY_PASSES) had no effect on
+# that path and were removed; net_distance_ph.reduce.reduce_to_core still
+# accepts its own keyword arguments.
 
-# Stage-2 observability and recovery. A heartbeat is printed and appended to
-# work/reduce_progress.log while a contraction pass is busy. A crash-safe
-# checkpoint is written after this many completed passes; rerunning
-# ``python run.py reduce`` resumes automatically.
-REDUCE_HEARTBEAT_SECONDS = 30
-REDUCE_CHECKPOINT_EVERY_PASSES = 1
-
-# --------------------------------------------------------------------------
-# Reduction, part two
-# --------------------------------------------------------------------------
 # Relabel core nodes in reverse Cuthill-McKee order before routing. Pure cache
 # locality -- it changes no distance. Benchmark speed on your own graph.
 RCM_REORDER = True

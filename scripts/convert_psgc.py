@@ -144,6 +144,20 @@ def render(source: Path):
     return localities_json, data.getvalue(), payload, counts
 
 
+def same_content(path: Path, expected: bytes) -> bool:
+    """True if ``path`` holds ``expected``; gzip files are compared decompressed.
+
+    Compressed bytes depend on the zlib implementation (for example zlib-ng),
+    so identical records can produce different .gz bytes on another build.
+    """
+    if not path.is_file():
+        return False
+    actual = path.read_bytes()
+    if path.suffix == ".gz":
+        return gzip.decompress(actual) == gzip.decompress(expected)
+    return actual == expected
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     here = Path(__file__).resolve().parents[1] / "reference" / "psgc"
@@ -155,7 +169,7 @@ def main(argv=None):
     targets = {args.output / LOCALITIES_NAME: localities, args.output / ALL_NAME: all_rows}
     if args.check:
         for path, expected in targets.items():
-            if not path.is_file() or path.read_bytes() != expected:
+            if not same_content(path, expected):
                 p.error(f"Generated PSGC dataset is missing or differs from source: {path}")
         print("PSGC conversion verified: 43,768 worksheet records (two unclassified), 1,642 localities, exact source SHA-256")
         return 0

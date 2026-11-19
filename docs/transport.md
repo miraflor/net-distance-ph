@@ -99,6 +99,8 @@ The engine continues to treat the network as undirected, with edge weights based
 
 Use the default `SNAP_FALLBACK_TERMINALS_ONLY = False` only when reproducing older output conventions. For a newly justified matrix, consider enabling it in `config.py` to prevent fallback locality attachment to an intermediate point of a passing ferry route. This is a **behavioral choice**, not a harmless optimization: it can change distances.
 
+`FERRY_TERMINAL_RULE` in `config.py` decides which ferry nodes may receive a gangway edge. The default, `"part_endpoint"`, keeps the historical rule: the first and last vertex of every ferry polyline part. When OSM stores one crossing as several ways, the point where two ways meet is then also a terminal, and a road within `FERRY_CONNECT_KM` of that point receives a gangway edge although no ferry stops there. `"ferry_degree_1"` also requires that the node touches exactly one ferry segment. This removes those meeting points, but it also removes an offshore port where exactly two separate ferry lines end on the same node; such a port then has no gangway unless a road already touches it. The extracted layers do not carry route-relation membership, so the graph cannot separate the two cases. The graph build prints how many off-road part endpoints join exactly two ferry segments, which is the number of nodes the two rules treat differently. Changing the rule changes the stage-1 graph; later stages detect the change and ask for `python run.py graph`.
+
 ## 6. Quality assurance before a nationwide matrix
 
 1. Compare PBF extraction counts, input SHA-256, and sidecar hashes against the provenance and expected source vintage.

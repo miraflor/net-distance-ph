@@ -12,7 +12,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-# Resource-aware timing (v48)
+# Resource-aware timing
 from .observability import ResourceSampler
 import sys
 import threading
@@ -32,7 +32,7 @@ def paths(workspace):
             "output": workspace / "output", "logs": workspace / "logs"}
 
 
-# Unified runtime observability (v47). This is shared by every pipeline stage.
+# Runtime observability shared by every pipeline stage.
 from contextvars import ContextVar as _ContextVar
 from datetime import timezone as _timezone
 

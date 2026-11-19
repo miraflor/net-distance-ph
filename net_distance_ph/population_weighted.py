@@ -192,7 +192,8 @@ def _component_curve(D, population, cap):
     excluding constant origin-to-road snap offsets.
     """
     n = len(population)
-    assert D.shape == (n, n) and np.isfinite(D).all()
+    if D.shape != (n, n) or not np.isfinite(D).all():
+        raise ValueError("A component distance matrix must be square and finite")
     candidates = np.arange(n, dtype=int)
     selected = [int(np.argmin(np.asarray(population, float) @ D))]
     p = np.asarray(population, float)
@@ -255,7 +256,12 @@ def select_sites_balanced(D, pop, offset, *, max_sites=12):
 
     Both ratios run from 0 to 1; the second measures how much of the full
     demand support is retained beyond the mandatory one-per-component sites.
-    This has no manually tuned distance threshold or penalty coefficient.
+    This has no manually tuned distance threshold or penalty coefficient,
+    but ``max_sites`` still matters. Each extra site adds 1/(n_demand -
+    n_components) to the score, so the chosen k grows with the number of demand
+    nodes. Synthetic examples sometimes hit the cap, but hitting it does
+    NOT establish that the unconstrained score would prefer a larger k.
+    ``reached_site_cap`` only records cap contact, not a binding-constraint test.
     It is a specified representation tradeoff, NOT a statistical guarantee of
     optimal k or a global solution to each NP-hard k-median problem.
     """
@@ -435,7 +441,7 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
-# Population-weighted logging instrumentation (v44)
+# Logging instrumentation
 def run_options(args):
     from .population_routing import run, _PW_HEARTBEAT_SECONDS
     from .workspace import run_log, timed_step

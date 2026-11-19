@@ -194,14 +194,25 @@ def _validated_ids(column, id_col):
 STAGE1_CONFIG_KEYS = (
     "ROAD_SHP", "FERRY_SHP", "CENTROID_SHP",
     "CENTROID_ID_COL", "CENTROID_NAME_COL", "DBF_ENCODING",
-    "SNAP_DECIMALS", "GEODESIC_BACKEND", "FERRY_CONNECT_KM",
+    "SNAP_DECIMALS", "GEODESIC_BACKEND", "FERRY_CONNECT_KM", "FERRY_TERMINAL_RULE",
     "FERRY_COST_MULTIPLIER", "FERRY_FIXED_PENALTY_KM",
     "PREFER_ROAD_SNAP", "SNAP_FALLBACK_TERMINALS_ONLY", "MAX_CENTROID_SNAP_KM",
 )
 
+# Stage-1 settings added after graphs already existed. A graph recorded
+# without the key was built with this value, so it stays current as long as
+# the setting keeps that value.
+STAGE1_HISTORICAL_DEFAULTS = {"FERRY_TERMINAL_RULE": "part_endpoint"}
+
 
 def _stage1_config():
     return {key: getattr(C, key, None) for key in STAGE1_CONFIG_KEYS}
+
+
+def _stage1_changes(recorded, current):
+    """Sorted stage-1 setting names whose recorded and current values differ."""
+    recorded = {**STAGE1_HISTORICAL_DEFAULTS, **recorded}
+    return sorted(k for k in set(recorded) | set(current) if recorded.get(k) != current.get(k))
 
 
 def _require_stage1_current():
@@ -214,7 +225,8 @@ def _require_stage1_current():
             "version). Rerun: python run.py graph"
         )
     current = json.loads(json.dumps(_stage1_config()))
-    changed = sorted(k for k in set(recorded) | set(current) if recorded.get(k) != current.get(k))
+    recorded = {**STAGE1_HISTORICAL_DEFAULTS, **recorded}
+    changed = _stage1_changes(recorded, current)
     if changed:
         details = ", ".join(f"{k}: {recorded.get(k)!r} -> {current.get(k)!r}" for k in changed)
         raise SystemExit(
@@ -295,25 +307,37 @@ def _stage1_signature():
 
 
 def _reduce_input_signature():
-    return {
-        **_stage1_signature(),
-        "max_degree": int(C.MAX_CONTRACT_DEGREE),
-        "max_edge_growth": float(C.MAX_EDGE_GROWTH),
-    }
+    # The fast reducer has no settings, so only the stage-1 files identify a
+    # valid checkpoint. Older checkpoints also stored the degree-k contraction
+    # settings; those fields are ignored.
+    return _stage1_signature()
 
 
 def _checkpoint_matches(cp, signature):
+    """Resume only an uncontracted checkpoint (v1) or fast-reducer input (v2).
+
+    A partially completed legacy degree-k contraction checkpoint might be
+    exact, but has a different resume protocol. Rejecting it is safer than
+    treating all historical intermediate states as interchangeable.
+    """
     try:
-        return (
-            int(cp["checkpoint_version"]) == 1
-            and int(cp["graph_size"]) == signature["graph_size"]
-            and int(cp["graph_mtime_ns"]) == signature["graph_mtime_ns"]
-            and int(cp["sources_size"]) == signature["sources_size"]
-            and int(cp["sources_mtime_ns"]) == signature["sources_mtime_ns"]
-            and int(cp["max_degree"]) == signature["max_degree"]
-            and float(cp["max_edge_growth"]) == signature["max_edge_growth"]
-        )
-    except (KeyError, TypeError, ValueError):
+        if not all(int(cp[key]) == value for key, value in signature.items()):
+            return False
+        version = int(cp["checkpoint_version"])
+        if version not in (1, 2):
+            return False
+        if any(name not in cp.files for name in ("u", "v", "w", "src", "n_nodes")):
+            return False
+        if version == 2:
+            return "next_phase" not in cp.files and "next_pass" not in cp.files
+        # v1 from the first review patch has no legacy pass counters.
+        if "next_phase" not in cp.files and "next_pass" not in cp.files:
+            return True
+        return (int(cp["next_phase"]) == 0 and int(cp["next_pass"]) == 0
+                and int(cp["completed_passes"]) == 0
+                and int(cp["best_edges"]) == -1
+                and cp["alive"].size == 0)
+    except (KeyError, TypeError, ValueError, AttributeError):
         return False
 
 
@@ -356,6 +380,7 @@ def stage_graph(args):
         [(roads, gb.ROAD), (ferries, gb.FERRY)],
         snap_decimals=C.SNAP_DECIMALS,
         geodesic_backend=C.GEODESIC_BACKEND,
+        ferry_terminal_rule=getattr(C, "FERRY_TERMINAL_RULE", "part_endpoint"),
     )
     u, v, w, code = gb.connect_ferries(
         u, v, w, code, node_lonlat, flags, ferry_connect_km=C.FERRY_CONNECT_KM,
@@ -454,24 +479,16 @@ def stage_reduce(args):
                     u = cp["u"].copy()
                     v = cp["v"].copy()
                     w = cp["w"].copy()
-                    alive = cp["alive"].copy()
                     src = cp["src"].copy()
                     n_nodes = int(cp["n_nodes"])
-                    best_edges = int(cp["best_edges"])
-                    start_phase = int(cp["next_phase"])
-                    start_pass = int(cp["next_pass"])
-                    completed_passes = int(cp["completed_passes"])
-                    initial_nodes = int(cp["initial_nodes"])
-                    initial_edges = int(cp["initial_edges"])
+                    # Checkpoints from the older degree-k contraction also
+                    # store an ``alive`` mask; reduce_fast only validates it.
+                    alive = cp["alive"].copy() if "alive" in cp.files else np.empty(0, dtype=bool)
                     resume = True
-                    checkpoint_nodes = int(alive.sum()) if alive.size else n_nodes
-                    log(
-                        f"  valid checkpoint found: "
-                        f"{checkpoint_nodes:,} live nodes, {u.size:,} edges, "
-                        f"{completed_passes:,} completed passes"
-                    )
+                    log(f"  valid checkpoint found: {n_nodes:,} nodes, {u.size:,} edges")
                 else:
-                    log("  existing checkpoint does not match the current stage-1 files/config; ignoring it")
+                    log("  stage-2 checkpoint incompatible, stale or in a partially contracted legacy state; "
+                        "restarting reduction from stage 1")
             if not resume:
                 checkpoint_path.unlink(missing_ok=True)
 
@@ -493,59 +510,18 @@ def stage_reduce(args):
                 f"{u.size:,} edges in {time.time() - op:.1f}s"
             )
             alive = np.empty(0, dtype=bool)
-            best_edges = -1
-            start_phase = 0
-            start_pass = 0
-            completed_passes = 0
-            initial_nodes = None
-            initial_edges = None
 
-            # Save the post-filter state before the first contraction pass. If
-            # the laptop sleeps or the process is killed during that first pass,
-            # the expensive loading/de-duplication/filtering work is retained.
+            # Save the de-duplicated, filtered graph before the reduction, so
+            # an interruption does not repeat loading, de-duplication and
+            # component filtering.
             _atomic_savez(
                 checkpoint_path,
-                checkpoint_version=np.int64(1),
+                checkpoint_version=np.int64(2),
                 **{k: np.asarray(vv) for k, vv in signature.items()},
-                u=u, v=v, w=w, alive=alive, src=src,
-                n_nodes=np.int64(n_nodes), best_edges=np.int64(-1),
-                next_phase=np.int64(0), next_pass=np.int64(0),
-                completed_passes=np.int64(0),
-                initial_nodes=np.int64(-1), initial_edges=np.int64(-1),
+                u=u, v=v, w=w, src=src, n_nodes=np.int64(n_nodes),
             )
             log(f"  initial stage-2 checkpoint written")
 
-    checkpoint_counter = 0
-
-    def save_pass(state):
-        nonlocal checkpoint_counter
-        checkpoint_counter += 1
-        every = max(int(C.REDUCE_CHECKPOINT_EVERY_PASSES), 1)
-        must_save = state["phase_done"] or checkpoint_counter % every == 0
-        if not must_save:
-            return
-        started = time.time()
-        log(
-            f"    saving atomic stage-2 checkpoint "
-            f"after pass {state['completed_passes']:,}..."
-        )
-        _atomic_savez(
-            checkpoint_path,
-            checkpoint_version=np.int64(1),
-            **{k: np.asarray(vv) for k, vv in signature.items()},
-            u=state["u"], v=state["v"], w=state["w"],
-            alive=state["alive"], src=src, n_nodes=np.int64(n_nodes),
-            best_edges=np.int64(state["best_edges"]),
-            next_phase=np.int64(state["next_phase"]),
-            next_pass=np.int64(state["next_pass"]),
-            completed_passes=np.int64(state["completed_passes"]),
-            initial_nodes=np.int64(state["initial_nodes"]),
-            initial_edges=np.int64(state["initial_edges"]),
-        )
-        log(f"    checkpoint saved in {time.time() - started:.1f}s")
-
-    # Existing legacy pass checkpoints can be resumed by this exact fast path.
-    # No new multi-GB checkpoint is written until the smaller core is ready.
     u, v, w, alive = reduce_fast(
         u, v, w, n_nodes, src, alive=alive, progress=log
     )
@@ -679,6 +655,7 @@ def stage_matrix(args):
         batch_size=args.batch if args.batch is not None else C.BATCH_SIZE,
         checkpoint_every=C.CHECKPOINT_EVERY,
         on_wave_end=None if args.no_partial else _on_wave_end,
+        fingerprint=fingerprint,
     )
 
     _write_outputs(D_core, radius, s, cs, "final", with_csv=True, fingerprint=fingerprint)
@@ -804,10 +781,18 @@ def stage_verify(args):
         src_orig = np.unique(s["node_idx"][cs["snapped"]])
         pick = rng.choice(src_orig.size, min(C.VERIFY_N_SOURCES, src_orig.size), replace=False)
 
+        # One source per call, keeping only the source columns: a single call
+        # with all sources returns a dense (sources x all graph nodes) array,
+        # about 3.8 GB for 40 sources on a 12-million-node graph.
+        # directed=True: build_csr stores both directions of every edge, and
+        # directed=False would make scipy build a transposed copy per call.
+        full_graph = mx.build_csr(u, v, w, n_nodes)
+        del u, v, w
         t0 = time.time()
-        ref = dijkstra(
-            mx.build_csr(u, v, w, n_nodes), directed=False, indices=src_orig[pick]
-        )[:, src_orig]
+        ref = np.empty((len(pick), src_orig.size), dtype=np.float64)
+        for row, source in enumerate(src_orig[pick]):
+            ref[row] = dijkstra(full_graph, directed=True, indices=int(source))[src_orig]
+        del full_graph
         full_s = (time.time() - t0) / len(pick)
 
         core = np.load(Path(C.WORK) / "core_matrix.npy", mmap_mode="r")

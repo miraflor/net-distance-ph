@@ -288,6 +288,8 @@ def test_points_core_excludes_invalid_snaps_with_audit(tmp_path,monkeypatch):
     monkeypatch.setattr(route.gb,'snap_sources',lambda *a,**k:
         (np.array([0,-1]),np.array([0.,np.inf]),np.array([0,-1])),raising=False)
     monkeypatch.setattr(route.rd,'dedupe_edges',lambda u,v,w,n:(u,v,w),raising=False)
+    monkeypatch.setattr(route.mx,'drop_unreachable',lambda u,v,w,n,src,verbose=True:
+        (u,v,w,n,np.asarray(src)),raising=False)
     fake_fast=ModuleType('net_distance_ph.fast_reduce')
     def reduce_fast(u,v,w,n,protected,progress=None):
         assert protected.tolist()==[0]

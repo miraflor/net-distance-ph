@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.convert_psgc import render
+from scripts.convert_psgc import render, same_content
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "reference" / "psgc" / "PSGC-2Q-2026-Publication-Datafile.xlsx"
@@ -20,7 +20,10 @@ def test_workbook_is_pinned_and_json_matches():
     assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == EXPECTED_HASH
     localities, all_records, payload, counts = render(SOURCE)
     assert LOCALITIES.read_bytes() == localities
-    assert ALL.read_bytes() == all_records
+    # Compare decompressed records: the compressed bytes differ between zlib
+    # implementations (for example zlib-ng) even when the content is identical.
+    assert gzip.decompress(ALL.read_bytes()) == gzip.decompress(all_records)
+    assert same_content(ALL, all_records)
     assert counts["City"] == 149 and counts["Mun"] == 1493
     assert payload["source"]["sha256"] == EXPECTED_HASH
 
