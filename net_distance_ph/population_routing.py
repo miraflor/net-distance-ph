@@ -58,7 +58,7 @@ def _core_builder(core_dir):
 # that would otherwise both quarantine/publish the same core. OS locks release
 # on process death; no manually cleared stale lock directory is created.
 @contextmanager
-def _population_core_lock(core_root):
+def _population_core_lock(core_root, *, operation="barangay-core"):
     core_root = Path(core_root)
     core_root.mkdir(parents=True, exist_ok=True)
     with (core_root / ".build.lock").open("a+b") as lock_file:
@@ -72,7 +72,7 @@ def _population_core_lock(core_root):
             try:
                 msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
             except OSError as exc:
-                raise RuntimeError("Another barangay-core operation holds the workspace lock") from exc
+                raise RuntimeError(f"Another {operation} operation holds the workspace lock") from exc
             try:
                 yield
             finally:
@@ -83,7 +83,7 @@ def _population_core_lock(core_root):
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as exc:
-                raise RuntimeError("Another barangay-core operation holds the workspace lock") from exc
+                raise RuntimeError(f"Another {operation} operation holds the workspace lock") from exc
             try:
                 yield
             finally:
@@ -97,15 +97,33 @@ def _population_cache_lock(home, purpose):
     Use a distinct lock per stage, and a run-wide lock for normal CLI runs.
     Direct API callers are protected at the site and routing stages as well.
     """
-    try:
-        with _population_core_lock(Path(home) / ".locks" / purpose):
-            yield
-    except RuntimeError as exc:
-        if str(exc) == "Another barangay-core operation holds the workspace lock":
-            raise RuntimeError(
-                f"Another population-weighted {purpose} operation holds the workspace lock"
-            ) from exc
-        raise
+    with _population_core_lock(
+        Path(home) / ".locks" / purpose,
+        operation=f"population-weighted {purpose}",
+    ):
+        yield
+
+
+def _locked_population_stage(purpose):
+    """Serialize a stage while preserving its name, signature and docstring."""
+    def decorate(function):
+        @_pw_wraps(function)
+        def locked(*args, **kwargs):
+            if purpose == "core":
+                home = args[1] if len(args) > 1 else kwargs["home"]
+                manager = _population_core_lock(Path(home) / "cores")
+            elif purpose == "run":
+                options = args[0] if args else kwargs["args"]
+                workspace = Path(options.workspace).expanduser().resolve()
+                home = workspace / "variants" / "population_weighted"
+                manager = _population_cache_lock(home, "run")
+            else:
+                home = args[0] if args else kwargs["home"]
+                manager = _population_cache_lock(home, purpose)
+            with manager:
+                return function(*args, **kwargs)
+        return locked
+    return decorate
 
 
 # V2 digests covered the numerical CSR and the demand-to-core node map.
@@ -255,6 +273,7 @@ class TargetDijkstra:
             self.tseen,self.tslot,self.heap_node,self.heap_dist,self.epoch)
 
 
+@_locked_population_stage("core")
 @_pw_timed_phase("barangay terminal core (build/reuse)")
 def points_core(workspace, home, prepared, pop_meta, points_path, params):
     """Create/reuse a *different* core protecting all positive-population points."""
@@ -407,15 +426,7 @@ def points_core(workspace, home, prepared, pop_meta, points_path, params):
         raise
 
 
-# Keep the implementation unchanged and serialize its critical section.
-_points_core_unlocked = points_core
-
-
-def points_core(workspace, home, prepared, pop_meta, points_path, params):
-    with _population_core_lock(Path(home) / "cores"):
-        return _points_core_unlocked(workspace, home, prepared, pop_meta, points_path, params)
-
-
+@_locked_population_stage("sites")
 @_pw_timed_phase("adaptive k-medians selection")
 def build_town_sites(home, core_dir, key, rows, roster, params):
     """Town-sized exact local network D matrices; checkpoint selected sites per town."""
@@ -568,17 +579,6 @@ def build_town_sites(home, core_dir, key, rows, roster, params):
     return all_sites
 
 
-# Protect the full per-town checkpoint read/modify/write sequence for direct
-# API callers as well as ordinary CLI runs. Other selection settings can be
-# serialized conservatively without changing numerical results.
-_build_town_sites_unlocked = build_town_sites
-
-
-def build_town_sites(home, core_dir, key, rows, roster, params):
-    with _population_cache_lock(home, "sites"):
-        return _build_town_sites_unlocked(home, core_dir, key, rows, roster, params)
-
-
 _ROUTE_G=None
 _ROUTE_NODES=None
 _ROUTE_POP=None
@@ -615,6 +615,7 @@ def _routing_task(item):
     return i,numer,reach
 
 
+@_locked_population_stage("routing")
 @_pw_timed_phase("OD routing")
 def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
     """Per-unique-source memoization, streaming to memmaps; crash-recoverable."""
@@ -706,18 +707,6 @@ def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
         A[site_town[s]]+=site_pop[s]*numer[idx]
         B[site_town[s]]+=site_pop[s]*reach[idx]
     return towns,A,B,route_hash
-
-
-# The numerical routing checkpoint uses shared memmaps and fixed temporary
-# completion-mask filenames. Hold this lock until all source rows are written
-# and durably checkpointed; not just during route-directory creation.
-_compute_routing_unlocked = compute_routing
-
-
-def compute_routing(home, core_dir, sites, key, *, workers=2, all_towns=None):
-    with _population_cache_lock(home, "routing"):
-        return _compute_routing_unlocked(home, core_dir, sites, key,
-                                         workers=workers, all_towns=all_towns)
 
 
 @_pw_timed_phase(lambda *a, **kw: f"matrix export: {a[1] if len(a) > 1 else kw.get('level', 'unknown')}")
@@ -871,6 +860,7 @@ def _validated_province_crosswalk(source, roster):
     return crosswalk,digest(path)
 
 
+@_locked_population_stage("run")
 def run(args):
     """One-command optional run; tables and geometry are prepared as needed."""
     workspace=Path(args.workspace).expanduser().resolve()
@@ -1026,15 +1016,3 @@ def run(args):
     print_output_locations(locations, latest_file)
     print("COMPLETE: baseline centroid matrix, selected graph releases and original raw datasets unchanged", flush=True)
     return 0
-
-
-# The CLI is intentionally single-run per workspace. Stage-specific locks
-# above independently protect direct library use and resumed checkpoints.
-_run_unlocked = run
-
-
-def run(args):
-    workspace = Path(args.workspace).expanduser().resolve()
-    home = workspace / "variants" / "population_weighted"
-    with _population_cache_lock(home, "run"):
-        return _run_unlocked(args)
