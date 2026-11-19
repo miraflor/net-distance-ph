@@ -106,3 +106,30 @@ def test_existing_v2_hashed_core_migrates_after_verification(tmp_path):
     info = json.loads(info_path.read_text())
     assert info["core_sha256_version"] == route._CORE_SHA256_VERSION
     assert info["core_sha256"] == route._core_content_sha256(core)
+
+
+
+def test_nested_core_lock_error_keeps_its_real_operation_name(tmp_path):
+    """An inner core conflict must not be mislabeled as an outer run conflict."""
+    home = tmp_path / "population_weighted"
+    core_lock = home / "cores"
+    with route._population_core_lock(core_lock):
+        with route._population_cache_lock(home, "run"):
+            with pytest.raises(RuntimeError, match="Another barangay-core operation"):
+                with route._population_core_lock(core_lock):
+                    pass
+
+
+def test_lock_does_not_relabel_an_error_from_protected_code(tmp_path):
+    message = "Another barangay-core operation holds the workspace lock"
+    with pytest.raises(RuntimeError, match="^Another barangay-core operation"):
+        with route._population_cache_lock(tmp_path, "run"):
+            raise RuntimeError(message)
+
+
+@pytest.mark.parametrize("name", ["points_core", "build_town_sites", "compute_routing", "run"])
+def test_locked_stage_preserves_function_metadata(name):
+    function = getattr(route, name)
+    assert function.__name__ == name
+    assert function.__doc__
+    assert function.__wrapped__.__name__ == name

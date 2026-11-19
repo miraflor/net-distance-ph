@@ -139,3 +139,21 @@ The result is a **plausible model-based geographic network OD matrix**, suitable
 ## 8. v56 output discovery and one-run default
 
 The default `--level all` computes the same town-site routing once, then writes **town**, **province-equivalent** and **region** matrices from its saved population-pair totals. The CLI prints full paths to `distance_matrix_km.csv`, `distance_matrix_km.npy`, `reachable_pair_probability.npy`, `units.csv`, and the `latest_run.json` pointer for each requested tier. Use `--level town`, `--level province`, or `--level region` to export only a particular tier. `--geometry-source latest` selects only the exact hash-verified local points used by the most recent completed run, never a guessed replacement.
+
+
+## Run concurrency and cache migration (v3)
+
+Only one `net-distance-ph population-weighted` run may execute in a workspace
+at a time. A second simultaneous run is refused rather than writing to the
+same town-site and routing checkpoints. Direct API calls to core construction,
+site selection, and routing also serialize shared cache writes. Lock errors
+identify the operation holding the relevant lock. The advisory locks release
+when the owning process terminates; they do not require manual lock-file cleanup.
+
+Patched barangay cores use a content fingerprint that includes the graph core,
+barangay indexing and the sidecar arrays used for access and verification.
+When a previously generated patched core is encountered, its historical digest
+is checked before migration. Existing town-site or routing caches with an old
+or incomplete core identity may be recomputed once. Old-format cores retain
+their documented legacy identity. The change does **not** alter representative
+selection criteria, routing equations, or graph connectivity.

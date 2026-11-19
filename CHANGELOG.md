@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-11-19 â€” Population routing v3 hardening and maintenance
+
+- The review patch preserves the default distance model while improving exact
+  core preprocessing, single-source verification memory use, symmetric-CSR
+  Dijkstra execution, gzip content comparison, ferry gangway diagnostics, and
+  crash-safe population-core publication.
+- `FERRY_TERMINAL_RULE` is now configurable: `part_endpoint` remains the
+  historical default; `ferry_degree_1` is optional and may exclude genuine
+  ports where two ferry lines meet. The rule is described in `docs/transport.md`.
+- The obsolete `config.py` variables `MAX_CONTRACT_DEGREE`, `MAX_EDGE_GROWTH`,
+  `REDUCE_HEARTBEAT_SECONDS`, and `REDUCE_CHECKPOINT_EVERY_PASSES` were removed.
+  External scripts importing these names must be revised; the fast reducer
+  does not use the old degree-k-contraction tuning parameters.
+- A population-weighted CLI run takes an exclusive workspace lock. Direct
+  site-selection, routing, and core-building operations separately lock their
+  shared caches to avoid concurrent checkpoint or publication writes.
+- A stronger core fingerprint includes numerical CSR arrays, barangay-to-core
+  mappings, access offsets, original node references and snap metadata. Prior
+  patched cores are verified/migrated on reuse; dependent site and routing
+  caches may recompute once. Legacy core builders retain their old identity.
+- Single-process routing releases memory-mapped core references after success
+  or failure, preventing Windows file-replacement conflicts. Historical
+  partly contracted reducer checkpoints are rebuilt conservatively.
+- Follow-up maintenance: lock conflicts now name the lock actually denied,
+  rather than relabeling `RuntimeError` exceptions raised *inside* a run.
+  Four stage-lock wrappers use metadata-preserving decorators. No algorithm,
+  graph default, cache format, or distance result changes in this follow-up.
+
 - fix(boundaries): audit and conservatively repair invalid upstream geometries; reject material changes.
 
 - **CLI / source preparation:** Automatically select checksum-pinned PSGC-aligned
